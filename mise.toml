@@ -18,8 +18,15 @@ run = "npm --prefix frontend-src run lint"
 depends = ["frontend-install"]
 run = "npm --prefix frontend-src run build"
 
+[tasks.frontend-verify]
+depends = ["frontend-build"]
+run = [
+  "git ls-files --error-unmatch custom_components/health_assistant/frontend/dist/panel.js",
+  "git diff --exit-code custom_components/health_assistant/frontend/dist/panel.js",
+]
+
 [tasks.check]
-depends = ["fmt", "lint", "test", "frontend-lint", "frontend-build"]
+depends = ["fmt", "lint", "test", "frontend-lint", "frontend-verify"]
 
 [tasks.ci]
 depends = ["check"]
