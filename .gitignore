@@ -45,6 +45,9 @@ venv/
 *.log
 .ha-dev/
 
+# Frontend
+frontend-src/node_modules/
+
 # Worktrees
 .worktrees/
 

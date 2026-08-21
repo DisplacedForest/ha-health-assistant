@@ -1,0 +1,16 @@
+{
+  "name": "health-assistant-panel",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/panel.js --bundle --format=esm --minify --outfile=../custom_components/health_assistant/frontend/dist/panel.js",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "lit": "^3.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "eslint": "^9.14.0"
+  }
+}

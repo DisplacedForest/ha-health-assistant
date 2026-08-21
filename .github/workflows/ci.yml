@@ -48,3 +48,17 @@ jobs:
           cache-dependency-path: requirements-test.txt
       - run: pip install -r requirements-test.txt
       - run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    name: Frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend-src/package-lock.json
+      - run: npm --prefix frontend-src ci --no-fund --no-audit
+      - run: npm --prefix frontend-src run lint
+      - run: npm --prefix frontend-src run build

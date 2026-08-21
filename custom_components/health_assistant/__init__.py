@@ -12,9 +12,11 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .const import DOMAIN
 from .coordinator import HealthSummaryCoordinator
 from .ingest import EntityIngestion
+from .panel import async_register_panel, async_remove_panel
 from .services import async_setup_services, async_unload_services
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import HealthDatabase, HealthRepository, StoreError, StoreVersionError
+from .websocket_api import async_register_websocket_api
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -64,6 +66,8 @@ async def async_setup_entry(
         async_dispatcher_connect(hass, SIGNAL_HEALTH_DATA_UPDATED, _async_data_updated)
     )
     async_setup_services(hass)
+    async_register_websocket_api(hass)
+    await async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await ingestion.async_start()
     return True
@@ -74,6 +78,7 @@ async def async_unload_entry(
 ) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        async_remove_panel(hass)
         async_unload_services(hass)
         await hass.async_add_executor_job(entry.runtime_data.database.close)
     return unload_ok

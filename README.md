@@ -85,6 +85,16 @@ data:
 
 `health_assistant.add_body_measurement` records weight, body fat, and lean mass sharing one timestamp. Passing an `external_id` makes repeated calls idempotent, so re-running a backfill script never duplicates records.
 
+## The Health panel
+
+Configuring Health Assistant adds a Health entry to the sidebar, no manual resource registration needed. The panel is a real application view over the canonical store, served entirely from your instance and fully functional offline:
+
+- **Overview**: latest body metrics, today's activity, and the most recent workout, each with a source line showing exactly which provider and sensor produced the value.
+- **Trends**: weight, body fat, lean mass, steps, distance, and active energy over 7, 30, or 90 days, drawn as lightweight SVG charts.
+- Values display in your configured unit system; empty states point you at entity mapping and the manual actions.
+
+Data reaches the panel through a dedicated WebSocket API with bounded queries and server-side downsampling. The frontend never touches the database, and the backend never renders.
+
 ## Entities
 
 All entities live under a single Health Assistant device, read from the canonical store, and show unknown until data exists. Display units follow your Home Assistant unit system; stored values stay canonical.
