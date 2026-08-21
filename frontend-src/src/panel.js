@@ -14,6 +14,11 @@ const METRICS = [
 
 const RANGES = [7, 30, 90];
 
+const PROVIDER_LABELS = {
+  ha_entity: "Home Assistant sensors",
+  manual: "Manual entries",
+};
+
 class HealthAssistantPanel extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -25,6 +30,8 @@ class HealthAssistantPanel extends LitElement {
     _metric: { state: true },
     _days: { state: true },
     _error: { state: true },
+    _form: { state: true },
+    _saving: { state: true },
   };
 
   constructor() {
@@ -32,6 +39,8 @@ class HealthAssistantPanel extends LitElement {
     this._tab = "overview";
     this._metric = "weight";
     this._days = 30;
+    this._form = null;
+    this._saving = false;
     this._loadedOnce = false;
   }
 
@@ -134,11 +143,11 @@ class HealthAssistantPanel extends LitElement {
     return date.toLocaleDateString();
   }
 
-  _provenance(entry) {
+  _readingTime(entry) {
     if (!entry) {
       return nothing;
     }
-    return html`<div class="prov">${entry.source} · ${this._when(entry.observed_at)}</div>`;
+    return html`<div class="sub">${this._when(entry.observed_at)}</div>`;
   }
 
   _metricValue(entry, digits = 1) {
@@ -146,8 +155,164 @@ class HealthAssistantPanel extends LitElement {
       return html`<span class="empty-value">no data</span>`;
     }
     const shown = this._display(entry.value, entry.unit);
-    return html`<span class="value">${this._fmt(shown.value, digits)}</span>
-      <span class="unit">${shown.unit}</span>`;
+    const unitLabel =
+      shown.unit === "count" ? nothing : html`<span class="unit">${shown.unit}</span>`;
+    return html`<span class="value">${this._fmt(shown.value, digits)}</span>${unitLabel}`;
+  }
+
+  _defaultUnit(metric) {
+    if (metric === "weight" || metric === "lean_mass") {
+      return this._imperial ? "lb" : "kg";
+    }
+    if (metric === "distance") {
+      return this._imperial ? "mi" : "km";
+    }
+    if (metric === "body_fat_percentage") {
+      return "%";
+    }
+    if (metric === "active_energy") {
+      return "kcal";
+    }
+    return "";
+  }
+
+  _localNow(offsetMinutes = 0) {
+    const date = new Date(Date.now() - offsetMinutes * 60000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  _openForm(form) {
+    this._error = undefined;
+    this._form = this._form === form ? null : form;
+  }
+
+  _formValue(id) {
+    const el = this.shadowRoot.getElementById(id);
+    return el ? el.value.trim() : "";
+  }
+
+  async _submitMeasurement(ev) {
+    ev.preventDefault();
+    const value = Number(this._formValue("m-value"));
+    if (!Number.isFinite(value)) {
+      this._error = "Enter a numeric value";
+      return;
+    }
+    const metric = this._formValue("m-metric");
+    const data = { metric, value };
+    const unit = this._formValue("m-unit");
+    if (unit && unit !== "count") {
+      data.unit = unit;
+    }
+    const when = this._formValue("m-when");
+    if (when) {
+      data.observed_at = when;
+    }
+    await this._callAction("add_observation", data);
+  }
+
+  async _submitWorkout(ev) {
+    ev.preventDefault();
+    const workoutType = this._formValue("w-type");
+    const start = this._formValue("w-start");
+    const end = this._formValue("w-end");
+    if (!workoutType || !start || !end) {
+      this._error = "Workout type, start, and end are required";
+      return;
+    }
+    const data = { workout_type: workoutType, start, end };
+    const title = this._formValue("w-title");
+    if (title) {
+      data.title = title;
+    }
+    const energy = this._formValue("w-energy");
+    if (energy) {
+      data.energy_kcal = Number(energy);
+    }
+    const distance = this._formValue("w-distance");
+    if (distance) {
+      data.distance = Number(distance);
+      data.distance_unit = this._imperial ? "mi" : "km";
+    }
+    await this._callAction("add_workout", data);
+  }
+
+  async _callAction(action, data) {
+    this._saving = true;
+    this._error = undefined;
+    try {
+      await this.hass.callService(this._domain, action, data);
+      this._form = null;
+      await this._refresh();
+    } catch (err) {
+      this._error = (err && err.message) || "Unable to save";
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  _measurementForm() {
+    if (this._form !== "measure") {
+      return nothing;
+    }
+    return html`
+      <form class="entry" @submit=${this._submitMeasurement}>
+        <label>Metric
+          <select id="m-metric" @change=${(ev) => {
+            const unitField = this.shadowRoot.getElementById("m-unit");
+            if (unitField) {
+              unitField.value = this._defaultUnit(ev.target.value);
+            }
+          }}>
+            ${METRICS.map((m) => html`<option value=${m.key}>${m.label}</option>`)}
+          </select>
+        </label>
+        <label>Value
+          <input id="m-value" type="number" step="any" required />
+        </label>
+        <label>Unit
+          <input id="m-unit" type="text" .value=${this._defaultUnit("weight")} />
+        </label>
+        <label>When
+          <input id="m-when" type="datetime-local" .value=${this._localNow()} />
+        </label>
+        <button type="submit" class="primary" ?disabled=${this._saving}>
+          ${this._saving ? "Saving" : "Save"}
+        </button>
+      </form>
+    `;
+  }
+
+  _workoutForm() {
+    if (this._form !== "workout") {
+      return nothing;
+    }
+    return html`
+      <form class="entry" @submit=${this._submitWorkout}>
+        <label>Type
+          <input id="w-type" type="text" placeholder="running, strength, yoga" required />
+        </label>
+        <label>Title
+          <input id="w-title" type="text" placeholder="optional" />
+        </label>
+        <label>Start
+          <input id="w-start" type="datetime-local" .value=${this._localNow(60)} required />
+        </label>
+        <label>End
+          <input id="w-end" type="datetime-local" .value=${this._localNow()} required />
+        </label>
+        <label>Energy (kcal)
+          <input id="w-energy" type="number" step="any" placeholder="optional" />
+        </label>
+        <label>Distance (${this._imperial ? "mi" : "km"})
+          <input id="w-distance" type="number" step="any" placeholder="optional" />
+        </label>
+        <button type="submit" class="primary" ?disabled=${this._saving}>
+          ${this._saving ? "Saving" : "Save"}
+        </button>
+      </form>
+    `;
   }
 
   _renderEmptyState() {
@@ -156,19 +321,18 @@ class HealthAssistantPanel extends LitElement {
         <h2>No health data yet</h2>
         <p>
           Health Assistant builds a local health record from sources you already
-          have. Two ways to get started:
+          have.
         </p>
         <p>
           <b>Map sensors.</b> Open Settings, then Devices &amp; services, choose
           Health Assistant, and press Configure. Pick the sensors that feed each
           metric, like a smart scale's weight sensor.
         </p>
-        <p>
-          <b>Add records directly.</b> Call the
-          <code>${this._domain}.add_observation</code> or
-          <code>${this._domain}.add_workout</code> actions from Developer Tools
-          or an automation, including backfill with past timestamps.
-        </p>
+        <p><b>Or record something right now.</b></p>
+        <button class="primary" @click=${() => this._openForm("measure")}>
+          Log a measurement
+        </button>
+        ${this._measurementForm()}
       </div>
     `;
   }
@@ -196,12 +360,16 @@ class HealthAssistantPanel extends LitElement {
             <span class="label">Weight</span>
             <span>${this._metricValue(s.current_weight)}</span>
           </div>
-          ${this._provenance(s.current_weight)}
+          ${this._readingTime(s.current_weight)}
           <div class="row">
             <span class="label">Body fat</span>
             <span>${this._metricValue(s.current_body_fat)}</span>
           </div>
-          ${this._provenance(s.current_body_fat)}
+          ${this._readingTime(s.current_body_fat)}
+          <button class="ghost" @click=${() => this._openForm("measure")}>
+            Log a measurement
+          </button>
+          ${this._measurementForm()}
         </div>
         <div class="card">
           <h2>Today</h2>
@@ -209,12 +377,12 @@ class HealthAssistantPanel extends LitElement {
             <span class="label">Steps</span>
             <span>${this._metricValue(s.steps_today, 0)}</span>
           </div>
-          ${this._provenance(s.steps_today)}
+          ${this._readingTime(s.steps_today)}
           <div class="row">
             <span class="label">Active energy</span>
             <span>${this._metricValue(s.active_energy_today, 0)}</span>
           </div>
-          ${this._provenance(s.active_energy_today)}
+          ${this._readingTime(s.active_energy_today)}
         </div>
         <div class="card">
           <h2>Latest workout</h2>
@@ -225,19 +393,19 @@ class HealthAssistantPanel extends LitElement {
                   <span class="value">${this._fmt(workout.duration_seconds / 60, 0)}
                     <span class="unit">min</span></span>
                 </div>
-                <div class="prov">
-                  ${workout.workout_type} · ${this._when(workout.started_at)} ·
-                  ${workout.provider}
+                <div class="sub">
+                  ${workout.workout_type} · ${this._when(workout.started_at)}
                 </div>
                 <div class="row">
                   <span class="label">Last 7 days</span>
                   <span class="value">${s.workouts_last_7_days ?? "no data"}</span>
                 </div>
               `
-            : html`<p class="empty-value">
-                No workouts recorded yet. Use the
-                <code>${this._domain}.add_workout</code> action.
-              </p>`}
+            : html`<p class="empty-value">No workouts recorded yet.</p>`}
+          <button class="ghost" @click=${() => this._openForm("workout")}>
+            Log workout
+          </button>
+          ${this._workoutForm()}
         </div>
       </div>
     `;
@@ -256,8 +424,7 @@ class HealthAssistantPanel extends LitElement {
     const points = series.points.map((p) => ({
       time: new Date(p.t).getTime(),
       shown: this._display(p.v, series.unit),
-      source: p.source,
-      raw: p,
+      provider: p.provider,
     }));
     const unit = points[0].shown.unit;
     const values = points.map((p) => p.shown.value);
@@ -278,11 +445,13 @@ class HealthAssistantPanel extends LitElement {
       points.length <= 120
         ? points.map(
             (p) => svg`<circle cx="${x(p.time)}" cy="${y(p.shown.value)}" r="3">
-                <title>${this._fmt(p.shown.value)} ${unit} · ${new Date(p.time).toLocaleString()} · ${p.source}</title>
+                <title>${this._fmt(p.shown.value)} ${unit} · ${new Date(p.time).toLocaleString()} · ${PROVIDER_LABELS[p.provider] || p.provider}</title>
               </circle>`
           )
         : nothing;
-    const providers = [...new Set(series.points.map((p) => p.provider))];
+    const providers = [...new Set(series.points.map((p) => p.provider))].map(
+      (p) => PROVIDER_LABELS[p] || p
+    );
     return html`
       <svg viewBox="0 0 ${width} ${height}" role="img">
         <line class="axis" x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}"></line>
@@ -294,10 +463,9 @@ class HealthAssistantPanel extends LitElement {
         <path class="line" d="${path}"></path>
         ${dots}
       </svg>
-      <div class="prov">
-        ${series.points.length} points (${unit})
-        ${series.downsampled ? " · downsampled" : ""} · source${providers.length > 1 ? "s" : ""}:
-        ${providers.join(", ")}
+      <div class="sub caption">
+        ${series.points.length} points${unit === "count" ? "" : ` (${unit})`}
+        ${series.downsampled ? " · downsampled" : ""} · from ${providers.join(", ")}
       </div>
     `;
   }
@@ -409,10 +577,19 @@ class HealthAssistantPanel extends LitElement {
       cursor: pointer;
       font: inherit;
     }
-    button.active {
+    button.active,
+    button.primary {
       background: var(--primary-color);
       color: var(--text-primary-color, #fff);
       border-color: var(--primary-color);
+    }
+    button.ghost {
+      margin-top: 14px;
+      border-style: dashed;
+    }
+    button[disabled] {
+      opacity: 0.6;
+      cursor: default;
     }
     .grid {
       display: grid;
@@ -460,19 +637,45 @@ class HealthAssistantPanel extends LitElement {
       font-size: 0.9em;
       margin-left: 2px;
     }
-    .prov {
+    .sub {
       color: var(--secondary-text-color);
       font-size: 0.78em;
       margin-top: 2px;
       text-align: right;
     }
+    .sub.caption {
+      text-align: left;
+    }
     .empty-value {
       color: var(--secondary-text-color);
     }
-    code {
-      background: var(--secondary-background-color, rgba(127, 127, 127, 0.2));
-      border-radius: 4px;
-      padding: 1px 5px;
+    .entry {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--divider-color, #444);
+    }
+    .entry label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.8em;
+      color: var(--secondary-text-color);
+    }
+    .entry input,
+    .entry select {
+      background: var(--primary-background-color);
+      color: var(--primary-text-color);
+      border: 1px solid var(--divider-color, #444);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font: inherit;
+      min-width: 0;
+    }
+    .entry button {
+      align-self: end;
     }
     svg {
       width: 100%;
