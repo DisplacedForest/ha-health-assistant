@@ -485,3 +485,32 @@ def test_unranked_defaults_keep_first_seen_supplier(repository):
     rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
     assert len(rows) == 1
     assert rows[0].provider == "withings"
+
+
+def test_merge_requires_tolerance_against_every_group_member(repository):
+    repository.upsert_observation(
+        observation(provider="scale_a", external_id="a", value=100.0)
+    )
+    repository.upsert_observation(
+        observation(
+            provider="scale_b",
+            external_id="b",
+            value=100.5,
+            observed_at=BASE + timedelta(seconds=40),
+        )
+    )
+    repository.upsert_observation(
+        observation(
+            provider="scale_c",
+            external_id="c",
+            value=99.4,
+            observed_at=BASE + timedelta(seconds=80),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    merged = next(row for row in rows if len(row.sources) == 2)
+    lone = next(row for row in rows if len(row.sources) == 1)
+    assert merged.sources == ("scale_a", "scale_b")
+    assert lone.sources == ("scale_c",)
+    assert lone.possible_duplicate

@@ -81,7 +81,10 @@ def group_claims(
             if (
                 claim.observed_at - anchor.observed_at <= rule.merge_window
                 and claim.provider not in providers
-                and values_close(claim.value, anchor.value, rule.value_tolerance)
+                and all(
+                    values_close(claim.value, member.value, rule.value_tolerance)
+                    for member in group
+                )
             ):
                 group.append(claim)
                 continue
