@@ -165,3 +165,45 @@ async def test_panel_registered_and_removed(hass, config_entry):
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert DOMAIN not in hass.data["frontend_panels"]
+
+
+async def test_contested_metric_agrees_across_sensor_and_websocket(
+    hass, hass_ws_client, config_entry
+):
+    await setup_integration(hass, config_entry)
+    repository = config_entry.runtime_data.repository
+    for provider, external_id, value, offset in (
+        ("test_scale", "s-1", 80.0, 0),
+        ("test_bridge", "b-1", 90.0, 30),
+    ):
+        await hass.async_add_executor_job(
+            repository.upsert_observation,
+            HealthObservation(
+                person_id="primary",
+                metric=MetricType.WEIGHT,
+                value=value,
+                unit="kg",
+                observed_at=OBSERVED + timedelta(seconds=offset),
+                provider=provider,
+                external_id=external_id,
+                ingested_at=OBSERVED,
+            ),
+        )
+    await hass.async_add_executor_job(
+        repository.set_priority, MetricType.WEIGHT, ["test_scale", "test_bridge"]
+    )
+    coordinator = config_entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.health_assistant_current_weight")
+    assert float(state.state) == 80.0
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/summary"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    weight = msg["result"]["current_weight"]
+    assert weight["value"] == 80.0
+    assert weight["provider"] == "test_scale"
+    assert weight["possible_duplicate"] is True

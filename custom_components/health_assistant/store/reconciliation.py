@@ -18,21 +18,38 @@ class MetricClass(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTolerance:
+    absolute: float
+    relative: float
+
+
+@dataclass(frozen=True, slots=True)
 class ReconciliationRule:
     merge_window: timedelta | None
     suspicious_window: timedelta | None
+    value_tolerance: ValueTolerance | None = None
 
 
 RECONCILIATION_RULES: dict[MetricClass, ReconciliationRule] = {
     MetricClass.BODY_MEASUREMENT: ReconciliationRule(
         merge_window=timedelta(minutes=2),
         suspicious_window=timedelta(minutes=30),
+        value_tolerance=ValueTolerance(absolute=0.5, relative=0.01),
     ),
     MetricClass.DAILY_ACTIVITY: ReconciliationRule(
         merge_window=None,
         suspicious_window=None,
     ),
 }
+
+
+def values_close(left: float, right: float, tolerance: ValueTolerance | None) -> bool:
+    if tolerance is None:
+        return True
+    delta = abs(left - right)
+    if delta <= tolerance.absolute:
+        return True
+    return delta <= tolerance.relative * max(abs(left), abs(right))
 
 
 def metric_class(metric: MetricType) -> MetricClass:
@@ -59,11 +76,15 @@ def group_claims(
     for claim in ordered:
         if groups and rule.merge_window is not None:
             group = groups[-1]
-            anchor = group[0].observed_at
+            anchor = group[0]
             providers = {member.provider for member in group}
             if (
-                claim.observed_at - anchor <= rule.merge_window
+                claim.observed_at - anchor.observed_at <= rule.merge_window
                 and claim.provider not in providers
+                and all(
+                    values_close(claim.value, member.value, rule.value_tolerance)
+                    for member in group
+                )
             ):
                 group.append(claim)
                 continue
@@ -71,15 +92,16 @@ def group_claims(
     return groups
 
 
-def supplying_claim(
-    group: list[SourceClaim], preferred_provider: str | None
-) -> SourceClaim:
+def provider_rank(provider: str, priority: list[str]) -> int:
+    try:
+        return priority.index(provider)
+    except ValueError:
+        return len(priority)
+
+
+def supplying_claim(group: list[SourceClaim], priority: list[str]) -> SourceClaim:
     ordered = sorted(group, key=claim_sort_key)
-    if preferred_provider is not None:
-        for claim in ordered:
-            if claim.provider == preferred_provider:
-                return claim
-    return ordered[0]
+    return min(ordered, key=lambda claim: provider_rank(claim.provider, priority))
 
 
 def suspicious_group_indexes(

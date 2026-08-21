@@ -172,3 +172,25 @@ async def test_polled_provider_syncs_on_interval(hass, registry, short_interval)
     async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 4)
     await hass.async_block_till_done()
     assert provider.sync_calls == [{}]
+
+
+async def test_start_seeds_priorities_from_capabilities(hass, registry, repository):
+    from custom_components.health_assistant.providers import ProviderCapabilities
+
+    first = SyntheticProvider(
+        key="first",
+        capabilities=ProviderCapabilities(metrics=frozenset({MetricType.WEIGHT})),
+    )
+    second = SyntheticProvider(
+        key="second",
+        capabilities=ProviderCapabilities(metrics=frozenset({MetricType.WEIGHT})),
+    )
+    registry.register(first)
+    registry.register(second)
+    await registry.async_start()
+    assert repository.get_priority(MetricType.WEIGHT) == ["first", "second"]
+    await registry.async_stop()
+
+    await registry.async_start()
+    assert repository.get_priority(MetricType.WEIGHT) == ["first", "second"]
+    await registry.async_stop()

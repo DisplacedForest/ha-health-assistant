@@ -80,6 +80,18 @@ class ProviderRegistry:
             )
 
     async def async_start(self) -> None:
+        seeds = [
+            (metric, key)
+            for key, provider in self._providers.items()
+            for metric in sorted(provider.capabilities.metrics)
+        ]
+
+        def _seed_priorities() -> None:
+            for metric, key in seeds:
+                self._repository.ensure_provider_ranked(metric, key)
+
+        if seeds:
+            await self._hass.async_add_executor_job(_seed_priorities)
         for key, provider in self._providers.items():
             try:
                 await provider.async_start(self._sinks[key])

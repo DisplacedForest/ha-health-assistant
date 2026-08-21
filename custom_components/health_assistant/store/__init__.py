@@ -23,8 +23,10 @@ from .reconciliation import (
     RECONCILIATION_RULES,
     MetricClass,
     ReconciliationRule,
+    ValueTolerance,
     metric_class,
     rule_for,
+    values_close,
 )
 from .repository import HealthRepository
 
@@ -49,7 +51,9 @@ __all__ = [
     "StoreValidationError",
     "StoreVersionError",
     "UnitConversionError",
+    "ValueTolerance",
     "Workout",
     "metric_class",
     "rule_for",
+    "values_close",
 ]
