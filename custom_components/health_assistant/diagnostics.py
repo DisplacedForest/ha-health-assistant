@@ -17,9 +17,12 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
     observation_counts = database.execute(
         "SELECT metric, COUNT(*) AS n FROM observations GROUP BY metric"
     )
+    claim_counts = database.execute(
+        "SELECT metric, COUNT(*) AS n FROM source_claims GROUP BY metric"
+    )
     workout_count = database.execute("SELECT COUNT(*) AS n FROM workouts")
     observation_providers = database.execute(
-        "SELECT provider, COUNT(*) AS n FROM observations GROUP BY provider"
+        "SELECT provider, COUNT(*) AS n FROM source_claims GROUP BY provider"
     )
     workout_providers = database.execute(
         "SELECT provider, COUNT(*) AS n FROM workouts GROUP BY provider"
@@ -34,6 +37,7 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
         "observation_counts": {
             str(row["metric"]): int(row["n"]) for row in observation_counts
         },
+        "claim_counts": {str(row["metric"]): int(row["n"]) for row in claim_counts},
         "workout_count": int(workout_count[0]["n"]),
         "observation_providers": {
             str(row["provider"]): int(row["n"]) for row in observation_providers

@@ -33,6 +33,8 @@ def _observation_payload(
         "observed_at": observation.observed_at.isoformat(),
         "provider": observation.provider,
         "source": observation.external_id,
+        "sources": list(observation.sources) or [observation.provider],
+        "possible_duplicate": observation.possible_duplicate,
     }
 
 
@@ -132,6 +134,7 @@ async def ws_time_series(
                     "v": row.value,
                     "provider": row.provider,
                     "source": row.external_id,
+                    "possible_duplicate": row.possible_duplicate,
                 }
                 for row in rows
             ],

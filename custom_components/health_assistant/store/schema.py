@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -62,6 +62,87 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
                 provider TEXT PRIMARY KEY,
                 state TEXT NOT NULL DEFAULT '{}',
                 updated_at TEXT NOT NULL
+            )
+            """,
+        ),
+    ),
+    (
+        3,
+        (
+            """
+            CREATE TABLE source_claims (
+                id INTEGER PRIMARY KEY,
+                observation_id INTEGER,
+                person_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                value REAL NOT NULL,
+                unit TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                ingested_at TEXT NOT NULL,
+                provenance TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'active',
+                UNIQUE (provider, external_id, metric, observed_at)
+            )
+            """,
+            """
+            CREATE INDEX idx_source_claims_person_metric_time
+            ON source_claims (person_id, metric, observed_at)
+            """,
+            """
+            CREATE INDEX idx_source_claims_observation
+            ON source_claims (observation_id)
+            """,
+            """
+            INSERT INTO source_claims (
+                id, observation_id, person_id, metric, value, unit,
+                observed_at, provider, external_id, ingested_at,
+                provenance, status
+            )
+            SELECT
+                id, id, person_id, metric, value, unit,
+                observed_at, provider, external_id, ingested_at,
+                provenance, status
+            FROM observations
+            """,
+            """
+            CREATE TABLE observations_canonical (
+                id INTEGER PRIMARY KEY,
+                person_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                value REAL NOT NULL,
+                unit TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                ingested_at TEXT NOT NULL,
+                provenance TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'active',
+                possible_duplicate INTEGER NOT NULL DEFAULT 0
+            )
+            """,
+            """
+            INSERT INTO observations_canonical (
+                id, person_id, metric, value, unit, observed_at,
+                provider, external_id, ingested_at, provenance, status,
+                possible_duplicate
+            )
+            SELECT
+                id, person_id, metric, value, unit, observed_at,
+                provider, external_id, ingested_at, provenance, status, 0
+            FROM observations
+            """,
+            "DROP TABLE observations",
+            "ALTER TABLE observations_canonical RENAME TO observations",
+            """
+            CREATE INDEX idx_observations_person_metric_time
+            ON observations (person_id, metric, observed_at)
+            """,
+            """
+            CREATE TABLE metric_preferences (
+                metric TEXT PRIMARY KEY,
+                provider TEXT NOT NULL
             )
             """,
         ),

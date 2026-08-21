@@ -74,3 +74,11 @@ class HealthDatabase:
                 raise StoreError("database is not open")
             with self._conn:
                 return self._conn.execute(sql, tuple(params)).fetchall()
+
+    def execute_batch(self, statements: Iterable[tuple[str, Iterable[Any]]]) -> None:
+        with self._lock:
+            if self._conn is None:
+                raise StoreError("database is not open")
+            with self._conn:
+                for sql, params in statements:
+                    self._conn.execute(sql, tuple(params))

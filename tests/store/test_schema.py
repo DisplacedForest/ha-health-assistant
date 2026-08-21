@@ -114,12 +114,63 @@ def test_populated_v1_database_upgrades_to_current_version(tmp_path):
 
     db = HealthDatabase(path)
     db.open()
-    rows = db.execute("SELECT value FROM observations")
+    rows = db.execute("SELECT * FROM observations")
+    claims = db.execute("SELECT * FROM source_claims")
     state_rows = db.execute("SELECT * FROM provider_state")
+    preferences = db.execute("SELECT * FROM metric_preferences")
     db.close()
     assert stored_version(path) == SCHEMA_VERSION
     assert [row["value"] for row in rows] == [80.0]
+    assert rows[0]["possible_duplicate"] == 0
+    assert len(claims) == 1
+    assert claims[0]["observation_id"] == rows[0]["id"]
+    assert claims[0]["provider"] == "manual"
+    assert claims[0]["value"] == 80.0
     assert state_rows == []
+    assert preferences == []
+
+
+def test_populated_v2_database_upgrades_with_claims_split(tmp_path):
+    path = tmp_path / "health.sqlite"
+    conn = sqlite3.connect(path)
+    apply_migrations(conn, migrations=MIGRATIONS[:2], latest=2)
+    for external_id, value in (("obs-1", 80.0), ("obs-2", 79.5)):
+        conn.execute(
+            """
+            INSERT INTO observations (
+                person_id, metric, value, unit, observed_at,
+                provider, external_id, ingested_at
+            )
+            VALUES (
+                'primary', 'weight', ?, 'kg', '2026-08-20T12:00:00+00:00',
+                'ha_entity', ?, '2026-08-20T12:00:00+00:00'
+            )
+            """,
+            (value, external_id),
+        )
+    conn.execute(
+        """
+        INSERT INTO provider_state (provider, state, updated_at)
+        VALUES ('synthetic', '{"cursor": 5}', '2026-08-20T12:00:00+00:00')
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db = HealthDatabase(path)
+    db.open()
+    rows = db.execute("SELECT * FROM observations ORDER BY id")
+    claims = db.execute("SELECT * FROM source_claims ORDER BY id")
+    state_rows = db.execute("SELECT * FROM provider_state")
+    db.close()
+    assert stored_version(path) == SCHEMA_VERSION
+    assert [row["value"] for row in rows] == [80.0, 79.5]
+    assert [claim["observation_id"] for claim in claims] == [
+        rows[0]["id"],
+        rows[1]["id"],
+    ]
+    assert len(state_rows) == 1
+    assert state_rows[0]["provider"] == "synthetic"
 
 
 def test_migrations_are_append_only_and_ordered():
