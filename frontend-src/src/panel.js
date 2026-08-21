@@ -424,7 +424,7 @@ class HealthAssistantPanel extends LitElement {
     const points = series.points.map((p) => ({
       time: new Date(p.t).getTime(),
       shown: this._display(p.v, series.unit),
-      source: p.source,
+      provider: p.provider,
     }));
     const unit = points[0].shown.unit;
     const values = points.map((p) => p.shown.value);
@@ -445,7 +445,7 @@ class HealthAssistantPanel extends LitElement {
       points.length <= 120
         ? points.map(
             (p) => svg`<circle cx="${x(p.time)}" cy="${y(p.shown.value)}" r="3">
-                <title>${this._fmt(p.shown.value)} ${unit} · ${new Date(p.time).toLocaleString()} · ${p.source}</title>
+                <title>${this._fmt(p.shown.value)} ${unit} · ${new Date(p.time).toLocaleString()} · ${PROVIDER_LABELS[p.provider] || p.provider}</title>
               </circle>`
           )
         : nothing;
