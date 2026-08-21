@@ -37,6 +37,16 @@ This boots a disposable Home Assistant (`ghcr.io/home-assistant/home-assistant:s
 
 To pick up code changes, restart the container (Ctrl+C, then `mise run ha` again). Add the integration from Settings, then Devices & services, then Add integration, then search for Health Assistant.
 
+## Installing the dev variant into a real instance
+
+If you run an actual Home Assistant and want the working tree installed next to a HACS-installed production copy:
+
+```bash
+mise run install-dev
+```
+
+This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. The production copy is never installed this way; it comes from HACS.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.
