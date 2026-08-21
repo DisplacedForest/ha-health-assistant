@@ -40,7 +40,9 @@ def test_fresh_database_migrates_to_current_version(tmp_path):
     db.open()
     db.close()
     assert stored_version(path) == SCHEMA_VERSION
-    assert {"observations", "workouts", "schema_info"} <= table_names(path)
+    assert {"observations", "workouts", "provider_state", "schema_info"} <= table_names(
+        path
+    )
 
 
 def test_reopen_is_idempotent(tmp_path):
@@ -88,6 +90,36 @@ def test_failed_migration_rolls_back_completely(tmp_path):
     apply_migrations(conn, migrations=fixed, latest=1)
     assert current_version(conn) == 1
     conn.close()
+
+
+def test_populated_v1_database_upgrades_to_current_version(tmp_path):
+    path = tmp_path / "health.sqlite"
+    conn = sqlite3.connect(path)
+    apply_migrations(conn, migrations=MIGRATIONS[:1], latest=1)
+    conn.execute(
+        """
+        INSERT INTO observations (
+            person_id, metric, value, unit, observed_at,
+            provider, external_id, ingested_at
+        )
+        VALUES (
+            'primary', 'weight', 80.0, 'kg', '2026-08-20T12:00:00+00:00',
+            'manual', 'obs-1', '2026-08-20T12:00:00+00:00'
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+    assert stored_version(path) == 1
+
+    db = HealthDatabase(path)
+    db.open()
+    rows = db.execute("SELECT value FROM observations")
+    state_rows = db.execute("SELECT * FROM provider_state")
+    db.close()
+    assert stored_version(path) == SCHEMA_VERSION
+    assert [row["value"] for row in rows] == [80.0]
+    assert state_rows == []
 
 
 def test_migrations_are_append_only_and_ordered():

@@ -8,26 +8,18 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, HomeAssistant, State, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.helpers.event import (
     EventStateChangedData,
     async_track_state_change_event,
 )
-from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_system import METRIC_SYSTEM
 
-from .const import CONF_MAPPINGS, PROVIDER_HA_ENTITY
-from .signals import SIGNAL_HEALTH_DATA_UPDATED
-from .store import (
-    DEFAULT_PERSON_ID,
-    HealthObservation,
-    HealthRepository,
-    MetricType,
-    StoreValidationError,
-    UnitConversionError,
-)
-from .store.units import canonical_unit, convert
+from ..const import CONF_MAPPINGS, PROVIDER_HA_ENTITY
+from ..store import MetricType, StoreValidationError, UnitConversionError
+from ..store.units import canonical_unit
+from .contract import CandidateObservation, HealthProvider, ProviderCapabilities
+from .sink import ProviderSink
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,15 +35,9 @@ def default_source_unit(hass: HomeAssistant, metric: MetricType) -> str:
     return canonical_unit(metric)
 
 
-class EntityIngestion:
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        repository: HealthRepository,
-    ) -> None:
+class EntityProvider(HealthProvider):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._hass = hass
-        self._repository = repository
         self._metric_by_entity: dict[str, MetricType] = {}
         for metric_value, entity_ids in entry.options.get(CONF_MAPPINGS, {}).items():
             try:
@@ -61,9 +47,26 @@ class EntityIngestion:
                 continue
             for entity_id in entity_ids:
                 self._metric_by_entity[entity_id] = metric
+        self._sink: ProviderSink | None = None
         self._unsubscribe = None
 
-    async def async_start(self) -> None:
+    @property
+    def key(self) -> str:
+        return PROVIDER_HA_ENTITY
+
+    @property
+    def display_name(self) -> str:
+        return "Home Assistant entities"
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            metrics=frozenset(self._metric_by_entity.values()),
+            can_import=True,
+        )
+
+    async def async_start(self, sink: ProviderSink) -> None:
+        self._sink = sink
         if not self._metric_by_entity:
             return
         self._unsubscribe = async_track_state_change_event(
@@ -72,8 +75,7 @@ class EntityIngestion:
         for entity_id in self._metric_by_entity:
             await self._async_ingest_state(self._hass.states.get(entity_id))
 
-    @callback
-    def async_stop(self) -> None:
+    async def async_stop(self) -> None:
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
@@ -82,7 +84,7 @@ class EntityIngestion:
         await self._async_ingest_state(event.data.get("new_state"))
 
     async def _async_ingest_state(self, state: State | None) -> None:
-        if state is None:
+        if state is None or self._sink is None:
             return
         metric = self._metric_by_entity.get(state.entity_id)
         if metric is None:
@@ -100,8 +102,20 @@ class EntityIngestion:
         source_unit = state.attributes.get(
             ATTR_UNIT_OF_MEASUREMENT
         ) or default_source_unit(self._hass, metric)
+        candidate = CandidateObservation(
+            metric=metric,
+            value=raw_value,
+            unit=str(source_unit),
+            observed_at=state.last_updated,
+            external_id=state.entity_id,
+            provenance={
+                "entity_id": state.entity_id,
+                "source_unit": str(source_unit),
+                "raw_value": state.state,
+            },
+        )
         try:
-            value = convert(raw_value, str(source_unit), canonical_unit(metric))
+            await self._sink.async_add_observation(candidate)
         except UnitConversionError:
             _LOGGER.debug(
                 "ignoring %s: cannot convert unit %r to %s for %s",
@@ -110,29 +124,7 @@ class EntityIngestion:
                 canonical_unit(metric),
                 metric,
             )
-            return
-        observation = HealthObservation(
-            person_id=DEFAULT_PERSON_ID,
-            metric=metric,
-            value=value,
-            unit=canonical_unit(metric),
-            observed_at=state.last_updated,
-            provider=PROVIDER_HA_ENTITY,
-            external_id=state.entity_id,
-            ingested_at=dt_util.utcnow(),
-            provenance={
-                "entity_id": state.entity_id,
-                "source_unit": str(source_unit),
-                "raw_value": state.state,
-            },
-        )
-        try:
-            await self._hass.async_add_executor_job(
-                self._repository.upsert_observation, observation
-            )
         except StoreValidationError:
             _LOGGER.debug(
                 "ignoring %s: rejected by store", state.entity_id, exc_info=True
             )
-            return
-        async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)

@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -51,6 +51,18 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             """
             CREATE INDEX idx_workouts_person_time
             ON workouts (person_id, started_at)
+            """,
+        ),
+    ),
+    (
+        2,
+        (
+            """
+            CREATE TABLE provider_state (
+                provider TEXT PRIMARY KEY,
+                state TEXT NOT NULL DEFAULT '{}',
+                updated_at TEXT NOT NULL
+            )
             """,
         ),
     ),

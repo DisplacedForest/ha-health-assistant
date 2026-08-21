@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.
+
 ## [0.1.0] - 2026-08-21
 
 ### Added
