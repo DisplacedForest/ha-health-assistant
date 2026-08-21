@@ -8,9 +8,11 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PROVIDER_MANUAL
+from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
     DEFAULT_PERSON_ID,
     HealthObservation,
@@ -104,6 +106,7 @@ async def _async_store_observation(
         await hass.async_add_executor_job(repository.upsert_observation, observation)
     except StoreValidationError as err:
         raise ServiceValidationError(str(err)) from err
+    async_dispatcher_send(hass, SIGNAL_HEALTH_DATA_UPDATED)
 
 
 async def _async_add_observation(call: ServiceCall) -> None:
@@ -176,6 +179,7 @@ async def _async_add_workout(call: ServiceCall) -> None:
         await call.hass.async_add_executor_job(repository.upsert_workout, workout)
     except StoreValidationError as err:
         raise ServiceValidationError(str(err)) from err
+    async_dispatcher_send(call.hass, SIGNAL_HEALTH_DATA_UPDATED)
 
 
 @callback

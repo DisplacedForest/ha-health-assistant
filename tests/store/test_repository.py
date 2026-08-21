@@ -207,6 +207,20 @@ def test_workout_range_query(repository):
     assert ranged[0].external_id == "workout-2"
 
 
+def test_latest_workout(repository):
+    assert repository.latest_workout("primary") is None
+    repository.upsert_workout(workout())
+    newest = repository.upsert_workout(
+        workout(
+            external_id="workout-2",
+            started_at=OBSERVED + timedelta(days=3),
+            ended_at=OBSERVED + timedelta(days=3, hours=1),
+        )
+    )
+    assert repository.latest_workout("primary") == newest
+    assert repository.latest_workout("someone_else") is None
+
+
 def test_workout_end_before_start_rejected(repository):
     with pytest.raises(StoreValidationError):
         repository.upsert_workout(workout(ended_at=OBSERVED - timedelta(minutes=1)))

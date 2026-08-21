@@ -248,6 +248,18 @@ class HealthRepository:
         sql += " ORDER BY started_at, id"
         return [self._workout_from_row(r) for r in self._db.execute(sql, params)]
 
+    def latest_workout(self, person_id: str) -> Workout | None:
+        rows = self._db.execute(
+            """
+            SELECT * FROM workouts
+            WHERE person_id = ?
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+            """,
+            (person_id,),
+        )
+        return self._workout_from_row(rows[0]) if rows else None
+
     def _observation_from_row(self, row: Any) -> HealthObservation:
         return HealthObservation(
             person_id=row["person_id"],

@@ -85,6 +85,21 @@ data:
 
 `health_assistant.add_body_measurement` records weight, body fat, and lean mass sharing one timestamp. Passing an `external_id` makes repeated calls idempotent, so re-running a backfill script never duplicates records.
 
+## Entities
+
+All entities live under a single Health Assistant device, read from the canonical store, and show unknown until data exists. Display units follow your Home Assistant unit system; stored values stay canonical.
+
+| Entity | Meaning | Units | Updates |
+| --- | --- | --- | --- |
+| `sensor.health_assistant_current_weight` | Latest weight reading | kg, shown as lb on US systems | On ingestion |
+| `sensor.health_assistant_current_body_fat` | Latest body fat reading | % | On ingestion |
+| `sensor.health_assistant_steps_today` | Highest step count recorded today | steps | On ingestion |
+| `sensor.health_assistant_active_energy_today` | Highest active energy recorded today | kcal | On ingestion |
+| `sensor.health_assistant_latest_workout` | Most recent workout title or type, with start, end, and duration attributes | text | On ingestion |
+| `sensor.health_assistant_workouts_last_7_days` | Workouts in the trailing 7 days | count | On ingestion |
+
+Each measurement sensor carries `observed_at`, `provider`, and `source` attributes identifying exactly where its current value came from. Attributes never contain history; trends belong to the panel.
+
 ## Installation
 
 Not yet. Once the first release is tagged, Health Assistant will install as a custom HACS repository, and the instructions will live here.
