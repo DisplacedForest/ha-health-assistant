@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Source reconciliation: every incoming record is kept as a source claim, and cross-provider reports of the same physical measurement merge into one canonical observation carrying both provenances. Ambiguous near-matches are flagged as possible duplicates instead of being merged silently, a preferred source can be recorded per metric, and reconciliation is replayable with no claim ever deleted. The database migrates to schema version 3.
+
 ### Changed
 
 - Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.

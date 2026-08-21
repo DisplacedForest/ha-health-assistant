@@ -34,7 +34,7 @@ Privacy by default. Health Assistant has no cloud component and requires no exte
 What is stored, and where:
 
 - All health data lives in a single SQLite database at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory.
-- Each record holds the metric, value, unit, timestamp, person identifier, and provenance (which sensor or action produced it). Workouts additionally hold type, optional title, start, end, energy, and distance.
+- Each record holds the metric, value, unit, timestamp, person identifier, and provenance (which sensor or action produced it). Workouts additionally hold type, optional title, start, end, energy, and distance. Since schema version 3 the database also keeps a source-claims table (the per-provider evidence behind each canonical observation) and a per-metric preferred-source table; both live in the same local file.
 - Backups you create land beside it under `.storage/health_assistant/backups/`.
 - Your entity-to-metric mappings live in the config entry options, in HA's normal storage.
 
@@ -59,6 +59,7 @@ Core concepts:
 
 - **Canonical store**: a local SQLite database holding normalized health observations. It lives at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory, owned entirely by the integration: Recorder never stores it, and unloading or removing the integration never deletes it.
 - **Observations**: typed records (body measurements, activity, workouts, and later sleep and recovery) with units, timestamps, and provenance.
+- **Source claims and reconciliation**: every incoming record is kept as a source claim, and canonical observations are derived from claims. When two providers report the same physical measurement close together in time (a weigh-in arriving both from the scale integration and a health platform bridge), the claims merge under one canonical observation carrying both provenances; the merge windows are conservative, per metric class, and same-provider records never merge. Near-misses that fall inside a wider suspicious window are never merged silently: both records stay separate and carry a possible-duplicate flag you can see in the panel data. No claim is ever deleted by reconciliation, so the process is replayable.
 - **Providers**: adapters that ingest from or export to a source (HA entities, manual entry services, and later Hevy, smart scales, and health platform bridges).
 - **Entities and events**: summary sensors and automation triggers derived from the store, never the store itself.
 

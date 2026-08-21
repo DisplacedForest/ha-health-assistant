@@ -52,6 +52,24 @@ class HealthObservation:
     provenance: dict[str, Any] = field(default_factory=dict)
     status: RecordStatus = RecordStatus.ACTIVE
     id: int | None = None
+    possible_duplicate: bool = False
+    sources: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SourceClaim:
+    person_id: str
+    metric: MetricType
+    value: float
+    unit: str
+    observed_at: datetime
+    provider: str
+    external_id: str
+    ingested_at: datetime
+    provenance: dict[str, Any] = field(default_factory=dict)
+    status: RecordStatus = RecordStatus.ACTIVE
+    id: int | None = None
+    observation_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

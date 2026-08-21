@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from .db import HealthDatabase
@@ -16,8 +16,27 @@ from .models import (
     HealthObservation,
     MetricType,
     RecordStatus,
+    SourceClaim,
     Workout,
 )
+from .reconciliation import (
+    group_claims,
+    rule_for,
+    supplying_claim,
+    suspicious_group_indexes,
+)
+
+_OBSERVATION_SELECT = """
+    SELECT o.*, (
+        SELECT group_concat(provider, ',')
+        FROM (
+            SELECT provider FROM source_claims
+            WHERE observation_id = o.id
+            ORDER BY provider
+        )
+    ) AS sources
+    FROM observations o
+"""
 
 
 def _to_stored_datetime(value: datetime, name: str) -> str:
@@ -75,7 +94,7 @@ class HealthRepository:
             )
         rows = self._db.execute(
             """
-            INSERT INTO observations (
+            INSERT INTO source_claims (
                 person_id, metric, value, unit, observed_at,
                 provider, external_id, ingested_at, provenance, status
             )
@@ -103,7 +122,205 @@ class HealthRepository:
                 RecordStatus(observation.status).value,
             ),
         )
-        return self._observation_from_row(rows[0])
+        claim = self._claim_from_row(rows[0])
+        self._reconcile_around(claim)
+        linked = self._db.execute(
+            "SELECT observation_id FROM source_claims WHERE id = ?", (claim.id,)
+        )
+        result = self._db.execute(
+            _OBSERVATION_SELECT + " WHERE o.id = ?",
+            (linked[0]["observation_id"],),
+        )
+        return self._observation_from_row(result[0])
+
+    def get_claims(self, observation_id: int) -> list[SourceClaim]:
+        rows = self._db.execute(
+            """
+            SELECT * FROM source_claims
+            WHERE observation_id = ?
+            ORDER BY observed_at, provider, external_id
+            """,
+            (observation_id,),
+        )
+        return [self._claim_from_row(row) for row in rows]
+
+    def get_preferred_source(self, metric: MetricType) -> str | None:
+        rows = self._db.execute(
+            "SELECT provider FROM metric_preferences WHERE metric = ?",
+            (_require_metric(metric).value,),
+        )
+        return rows[0]["provider"] if rows else None
+
+    def set_preferred_source(self, metric: MetricType, provider: str | None) -> None:
+        metric = _require_metric(metric)
+        if provider is None:
+            self._db.execute(
+                "DELETE FROM metric_preferences WHERE metric = ?", (metric.value,)
+            )
+        else:
+            self._db.execute(
+                """
+                INSERT INTO metric_preferences (metric, provider)
+                VALUES (?, ?)
+                ON CONFLICT (metric) DO UPDATE SET provider = excluded.provider
+                """,
+                (metric.value, _require_text(provider, "provider")),
+            )
+        persons = self._db.execute(
+            "SELECT DISTINCT person_id FROM source_claims WHERE metric = ?",
+            (metric.value,),
+        )
+        for row in persons:
+            self.reconcile_metric(row["person_id"], metric)
+
+    def reconcile_metric(self, person_id: str, metric: MetricType) -> None:
+        metric = _require_metric(metric)
+        claims = self._fetch_claims(person_id, metric)
+        self._apply_reconciliation(person_id, metric, claims, None, None)
+
+    def _reconcile_around(self, claim: SourceClaim) -> None:
+        rule = rule_for(claim.metric)
+        merge = rule.merge_window or timedelta(0)
+        suspicious = rule.suspicious_window or timedelta(0)
+        band = suspicious + merge
+        fetch = 2 * band
+        claims = self._fetch_claims(
+            claim.person_id,
+            claim.metric,
+            claim.observed_at - fetch,
+            claim.observed_at + fetch,
+        )
+        self._apply_reconciliation(
+            claim.person_id,
+            claim.metric,
+            claims,
+            claim.observed_at - band,
+            claim.observed_at + band,
+        )
+
+    def _fetch_claims(self, person_id, metric, start=None, end=None):
+        sql = "SELECT * FROM source_claims WHERE person_id = ? AND metric = ?"
+        params: list[Any] = [person_id, metric.value]
+        if start is not None:
+            sql += " AND observed_at >= ?"
+            params.append(_to_stored_datetime(start, "start"))
+        if end is not None:
+            sql += " AND observed_at <= ?"
+            params.append(_to_stored_datetime(end, "end"))
+        sql += " ORDER BY observed_at, provider, external_id"
+        return [self._claim_from_row(row) for row in self._db.execute(sql, params)]
+
+    def _apply_reconciliation(self, person_id, metric, claims, band_start, band_end):
+        rule = rule_for(metric)
+        preferred = self.get_preferred_source(metric)
+        groups = group_claims(claims, rule)
+        flagged = suspicious_group_indexes(groups, rule)
+        referenced = {
+            claim.observation_id for claim in claims if claim.observation_id is not None
+        }
+        existing: dict[int, Any] = {}
+        if referenced:
+            placeholders = ",".join("?" for _ in referenced)
+            for row in self._db.execute(
+                f"SELECT * FROM observations WHERE id IN ({placeholders})",
+                tuple(referenced),
+            ):
+                existing[row["id"]] = row
+        statements: list[tuple[str, tuple]] = []
+        band_prior: set[int] = set()
+        band_ids: set[int] = set()
+        outside_ids: set[int] = set()
+        for index, group in enumerate(groups):
+            anchor = group[0].observed_at
+            in_band = band_start is None or (band_start <= anchor <= band_end)
+            if not in_band:
+                outside_ids.update(
+                    claim.observation_id
+                    for claim in group
+                    if claim.observation_id is not None
+                )
+                continue
+            canonical_id = min(claim.id for claim in group)
+            band_ids.add(canonical_id)
+            band_prior.update(
+                claim.observation_id
+                for claim in group
+                if claim.observation_id is not None
+            )
+            supplier = supplying_claim(group, preferred)
+            flag = 1 if index in flagged else 0
+            desired = (
+                person_id,
+                metric.value,
+                supplier.value,
+                supplier.unit,
+                _to_stored_datetime(supplier.observed_at, "observed_at"),
+                supplier.provider,
+                supplier.external_id,
+                _to_stored_datetime(supplier.ingested_at, "ingested_at"),
+                _to_stored_provenance(supplier.provenance),
+                RecordStatus(supplier.status).value,
+                flag,
+            )
+            current = existing.get(canonical_id)
+            if (
+                current is None
+                or tuple(
+                    current[column]
+                    for column in (
+                        "person_id",
+                        "metric",
+                        "value",
+                        "unit",
+                        "observed_at",
+                        "provider",
+                        "external_id",
+                        "ingested_at",
+                        "provenance",
+                        "status",
+                        "possible_duplicate",
+                    )
+                )
+                != desired
+            ):
+                statements.append(
+                    (
+                        """
+                        INSERT INTO observations (
+                            id, person_id, metric, value, unit, observed_at,
+                            provider, external_id, ingested_at, provenance,
+                            status, possible_duplicate
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (id) DO UPDATE SET
+                            person_id = excluded.person_id,
+                            metric = excluded.metric,
+                            value = excluded.value,
+                            unit = excluded.unit,
+                            observed_at = excluded.observed_at,
+                            provider = excluded.provider,
+                            external_id = excluded.external_id,
+                            ingested_at = excluded.ingested_at,
+                            provenance = excluded.provenance,
+                            status = excluded.status,
+                            possible_duplicate = excluded.possible_duplicate
+                        """,
+                        (canonical_id, *desired),
+                    )
+                )
+            for claim in group:
+                if claim.observation_id != canonical_id:
+                    statements.append(
+                        (
+                            "UPDATE source_claims SET observation_id = ? WHERE id = ?",
+                            (canonical_id, claim.id),
+                        )
+                    )
+        orphans = band_prior - band_ids - outside_ids
+        for orphan in orphans:
+            statements.append(("DELETE FROM observations WHERE id = ?", (orphan,)))
+        if statements:
+            self._db.execute_batch(statements)
 
     def get_observations(
         self,
@@ -112,28 +329,28 @@ class HealthRepository:
         start: datetime | None = None,
         end: datetime | None = None,
     ) -> list[HealthObservation]:
-        sql = "SELECT * FROM observations WHERE person_id = ?"
+        sql = _OBSERVATION_SELECT + " WHERE o.person_id = ?"
         params: list[Any] = [person_id]
         if metric is not None:
-            sql += " AND metric = ?"
+            sql += " AND o.metric = ?"
             params.append(_require_metric(metric).value)
         if start is not None:
-            sql += " AND observed_at >= ?"
+            sql += " AND o.observed_at >= ?"
             params.append(_to_stored_datetime(start, "start"))
         if end is not None:
-            sql += " AND observed_at < ?"
+            sql += " AND o.observed_at < ?"
             params.append(_to_stored_datetime(end, "end"))
-        sql += " ORDER BY observed_at, metric, id"
+        sql += " ORDER BY o.observed_at, o.metric, o.id"
         return [self._observation_from_row(r) for r in self._db.execute(sql, params)]
 
     def latest_observation(
         self, person_id: str, metric: MetricType
     ) -> HealthObservation | None:
         rows = self._db.execute(
-            """
-            SELECT * FROM observations
-            WHERE person_id = ? AND metric = ?
-            ORDER BY observed_at DESC, id DESC
+            _OBSERVATION_SELECT
+            + """
+            WHERE o.person_id = ? AND o.metric = ?
+            ORDER BY o.observed_at DESC, o.id DESC
             LIMIT 1
             """,
             (person_id, _require_metric(metric).value),
@@ -298,6 +515,10 @@ class HealthRepository:
         )
 
     def _observation_from_row(self, row: Any) -> HealthObservation:
+        keys = row.keys()
+        sources: tuple[str, ...] = ()
+        if "sources" in keys and row["sources"]:
+            sources = tuple(row["sources"].split(","))
         return HealthObservation(
             person_id=row["person_id"],
             metric=MetricType(row["metric"]),
@@ -310,6 +531,26 @@ class HealthRepository:
             provenance=json.loads(row["provenance"]),
             status=RecordStatus(row["status"]),
             id=row["id"],
+            possible_duplicate=bool(row["possible_duplicate"])
+            if "possible_duplicate" in keys
+            else False,
+            sources=sources,
+        )
+
+    def _claim_from_row(self, row: Any) -> SourceClaim:
+        return SourceClaim(
+            person_id=row["person_id"],
+            metric=MetricType(row["metric"]),
+            value=row["value"],
+            unit=row["unit"],
+            observed_at=_from_stored_datetime(row["observed_at"]),
+            provider=row["provider"],
+            external_id=row["external_id"],
+            ingested_at=_from_stored_datetime(row["ingested_at"]),
+            provenance=json.loads(row["provenance"]),
+            status=RecordStatus(row["status"]),
+            id=row["id"],
+            observation_id=row["observation_id"],
         )
 
     def _workout_from_row(self, row: Any) -> Workout:
