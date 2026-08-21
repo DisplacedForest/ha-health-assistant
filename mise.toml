@@ -7,8 +7,19 @@ run = "ruff check custom_components tests"
 [tasks.test]
 run = "pytest -q"
 
+[tasks.frontend-install]
+run = "npm --prefix frontend-src ci --no-fund --no-audit"
+
+[tasks.frontend-lint]
+depends = ["frontend-install"]
+run = "npm --prefix frontend-src run lint"
+
+[tasks.frontend-build]
+depends = ["frontend-install"]
+run = "npm --prefix frontend-src run build"
+
 [tasks.check]
-depends = ["fmt", "lint", "test"]
+depends = ["fmt", "lint", "test", "frontend-lint", "frontend-build"]
 
 [tasks.ci]
 depends = ["check"]

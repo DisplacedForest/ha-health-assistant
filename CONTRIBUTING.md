@@ -37,6 +37,17 @@ This boots a disposable Home Assistant (`ghcr.io/home-assistant/home-assistant:s
 
 To pick up code changes, restart the container (Ctrl+C, then `mise run ha` again). Add the integration from Settings, then Devices & services, then Add integration, then search for Health Assistant.
 
+## Frontend
+
+The Health panel's source lives in `frontend-src/` (Lit, bundled by esbuild). The built bundle at `custom_components/health_assistant/frontend/dist/panel.js` is committed, so installs never need Node; rebuild it whenever you change panel source and commit the result:
+
+```bash
+mise run frontend-build     # bundles frontend-src into the committed dist
+mise run frontend-lint      # eslint over the panel source
+```
+
+Both run as part of `mise run check` and in CI. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
+
 ## Installing the dev variant into a real instance
 
 If you run an actual Home Assistant and want the working tree installed next to a HACS-installed production copy:

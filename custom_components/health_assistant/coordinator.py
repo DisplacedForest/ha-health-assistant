@@ -42,9 +42,9 @@ class HealthSummaryCoordinator(DataUpdateCoordinator[HealthSummary]):
         self._repository = repository
 
     async def _async_update_data(self) -> HealthSummary:
-        return await self.hass.async_add_executor_job(self._build_summary)
+        return await self.hass.async_add_executor_job(self.build_summary)
 
-    def _build_summary(self) -> HealthSummary:
+    def build_summary(self) -> HealthSummary:
         repository = self._repository
         day_start = dt_util.start_of_local_day().astimezone(UTC)
         week_start = dt_util.utcnow() - timedelta(days=7)
