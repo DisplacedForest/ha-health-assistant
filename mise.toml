@@ -1,0 +1,17 @@
+[tasks.fmt]
+run = "ruff format --check custom_components tests"
+
+[tasks.lint]
+run = "ruff check custom_components tests"
+
+[tasks.test]
+run = "pytest -q"
+
+[tasks.check]
+depends = ["fmt", "lint", "test"]
+
+[tasks.ci]
+depends = ["check"]
+
+[tasks.security]
+run = "semgrep scan --config auto --error"
