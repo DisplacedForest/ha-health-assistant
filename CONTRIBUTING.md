@@ -61,6 +61,7 @@ This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assist
 - New behavior without tests.
 - Anything that adds a cloud dependency to the core integration. Local-first is the point.
 - Coupling the frontend panel to storage internals. The backend/frontend boundary is deliberate.
+- Home Assistant imports inside `custom_components/health_assistant/store/`. The store is pure Python; the async boundary lives in the integration setup code.
 - Code comments. The codebase ships uncommented; make the code say it instead.
 - Unrelated changes bundled into the same PR.
 

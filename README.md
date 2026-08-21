@@ -39,7 +39,7 @@ Backend and frontend are kept behind a deliberate boundary so the panel can evol
 
 Core concepts:
 
-- **Canonical store**: a local SQLite database holding normalized health observations.
+- **Canonical store**: a local SQLite database holding normalized health observations. It lives at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory, owned entirely by the integration: Recorder never stores it, and unloading or removing the integration never deletes it.
 - **Observations**: typed records (body measurements, activity, workouts, and later sleep and recovery) with units, timestamps, and provenance.
 - **Providers**: adapters that ingest from or export to a source (HA entities, manual entry services, and later Hevy, smart scales, and health platform bridges).
 - **Entities and events**: summary sensors and automation triggers derived from the store, never the store itself.
