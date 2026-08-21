@@ -255,6 +255,73 @@ def test_flag_clears_when_ambiguity_resolves(repository):
     rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
     merged = next(row for row in rows if len(row.sources) == 2)
     assert merged.sources == ("apple_health", "withings")
+    assert not any(row.possible_duplicate for row in rows)
+
+
+def test_merged_group_not_flagged_by_unrelated_same_provider_neighbor(repository):
+    repository.upsert_observation(
+        observation(
+            provider="withings",
+            external_id="w-early",
+            value=79.0,
+            observed_at=BASE - timedelta(minutes=10),
+        )
+    )
+    repository.upsert_observation(observation(provider="withings", value=80.0))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-1",
+            value=80.2,
+            observed_at=BASE + timedelta(seconds=60),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    assert not any(row.possible_duplicate for row in rows)
+
+
+def test_two_fully_merged_groups_are_not_flagged(repository):
+    for minutes, suffix in ((0, "one"), (10, "two")):
+        repository.upsert_observation(
+            observation(
+                provider="withings",
+                external_id=f"w-{suffix}",
+                observed_at=BASE + timedelta(minutes=minutes),
+            )
+        )
+        repository.upsert_observation(
+            observation(
+                provider="apple_health",
+                external_id=f"a-{suffix}",
+                observed_at=BASE + timedelta(minutes=minutes, seconds=30),
+            )
+        )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    assert all(row.sources == ("apple_health", "withings") for row in rows)
+    assert not any(row.possible_duplicate for row in rows)
+
+
+def test_merged_group_still_flags_against_third_provider(repository):
+    repository.upsert_observation(observation(provider="withings"))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-1",
+            observed_at=BASE + timedelta(seconds=30),
+        )
+    )
+    repository.upsert_observation(
+        observation(
+            provider="fitbit",
+            external_id="f-1",
+            observed_at=BASE + timedelta(minutes=10),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    assert all(row.possible_duplicate for row in rows)
 
 
 def test_single_source_series_matches_pre_reconciliation_behavior(repository):

@@ -95,7 +95,7 @@ def suspicious_group_indexes(
                 break
             left_providers = {claim.provider for claim in groups[left]}
             right_providers = {claim.provider for claim in groups[right]}
-            if left_providers != right_providers or len(left_providers) > 1:
+            if left_providers - right_providers and right_providers - left_providers:
                 flagged.add(left)
                 flagged.add(right)
     return flagged

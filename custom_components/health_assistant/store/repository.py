@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -83,6 +84,7 @@ def _require_metric(value: Any) -> MetricType:
 class HealthRepository:
     def __init__(self, database: HealthDatabase) -> None:
         self._db = database
+        self._reconcile_lock = threading.Lock()
 
     def upsert_observation(self, observation: HealthObservation) -> HealthObservation:
         metric = _require_metric(observation.metric)
@@ -175,8 +177,9 @@ class HealthRepository:
 
     def reconcile_metric(self, person_id: str, metric: MetricType) -> None:
         metric = _require_metric(metric)
-        claims = self._fetch_claims(person_id, metric)
-        self._apply_reconciliation(person_id, metric, claims, None, None)
+        with self._reconcile_lock:
+            claims = self._fetch_claims(person_id, metric)
+            self._apply_reconciliation(person_id, metric, claims, None, None)
 
     def _reconcile_around(self, claim: SourceClaim) -> None:
         rule = rule_for(claim.metric)
@@ -184,19 +187,20 @@ class HealthRepository:
         suspicious = rule.suspicious_window or timedelta(0)
         band = suspicious + merge
         fetch = 2 * band
-        claims = self._fetch_claims(
-            claim.person_id,
-            claim.metric,
-            claim.observed_at - fetch,
-            claim.observed_at + fetch,
-        )
-        self._apply_reconciliation(
-            claim.person_id,
-            claim.metric,
-            claims,
-            claim.observed_at - band,
-            claim.observed_at + band,
-        )
+        with self._reconcile_lock:
+            claims = self._fetch_claims(
+                claim.person_id,
+                claim.metric,
+                claim.observed_at - fetch,
+                claim.observed_at + fetch,
+            )
+            self._apply_reconciliation(
+                claim.person_id,
+                claim.metric,
+                claims,
+                claim.observed_at - band,
+                claim.observed_at + band,
+            )
 
     def _fetch_claims(self, person_id, metric, start=None, end=None):
         sql = "SELECT * FROM source_claims WHERE person_id = ? AND metric = ?"
