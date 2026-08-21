@@ -108,10 +108,11 @@ class ProviderRegistry:
             timer()
         self._timers.clear()
         for key, provider in self._providers.items():
-            try:
-                await provider.async_stop()
-            except Exception:
-                _LOGGER.exception("provider %s failed to stop", key)
+            async with self._sync_locks[key]:
+                try:
+                    await provider.async_stop()
+                except Exception:
+                    _LOGGER.exception("provider %s failed to stop", key)
 
     async def async_sync(self, key: str) -> None:
         provider = self._providers[key]
@@ -138,13 +139,14 @@ class ProviderRegistry:
             raise ProviderCapabilityError(
                 f"provider {key!r} does not declare export capability"
             )
-        try:
-            async with asyncio.timeout(self._sync_timeout):
-                await provider.async_export(records)
-        except ProviderCapabilityError:
-            raise
-        except Exception as err:
-            _LOGGER.exception("provider %s export failed", key)
-            self._record_result(key, str(err))
-            raise
+        async with self._sync_locks[key]:
+            try:
+                async with asyncio.timeout(self._sync_timeout):
+                    await provider.async_export(records)
+            except ProviderCapabilityError:
+                raise
+            except Exception as err:
+                _LOGGER.exception("provider %s export failed", key)
+                self._record_result(key, str(err) or type(err).__name__)
+                raise
         self._record_result(key, None)

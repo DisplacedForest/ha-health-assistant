@@ -132,6 +132,29 @@ async def test_start_isolates_failing_provider(hass, registry):
     await registry.async_stop()
 
 
+async def test_stop_waits_for_inflight_sync(hass, registry):
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_sync(sink, state):
+        started.set()
+        await release.wait()
+        return {"done": True}
+
+    provider = SyntheticProvider(key="slow", sync=slow_sync)
+    registry.register(provider)
+    sync_task = hass.async_create_task(registry.async_sync("slow"))
+    await started.wait()
+    stop_task = hass.async_create_task(registry.async_stop())
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert not stop_task.done()
+    release.set()
+    await sync_task
+    await stop_task
+    assert not registry.status("slow").degraded
+
+
 async def test_polled_provider_syncs_on_interval(hass, registry, short_interval):
     from homeassistant.util import dt as dt_util
     from pytest_homeassistant_custom_component.common import async_fire_time_changed
