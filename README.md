@@ -53,6 +53,38 @@ Core concepts:
 - **0.5.0 Automation & Platform**: health events, richer automation primitives, provider capability contracts.
 - **1.0.0**: stable local health platform with polished frontend and stable provider contracts.
 
+## Getting data in
+
+Two paths, no vendor lock-in either way.
+
+**Map existing sensors.** Open the integration's options (Settings, then Devices & services, then Health Assistant, then Configure) and pick the sensors that feed each metric: weight, body fat percentage, lean mass, steps, distance, and active energy. Any sensor already in Home Assistant works, whatever integration it comes from. State changes are validated, converted from the sensor's unit (or your configured unit system when the sensor doesn't declare one), and stored with the entity ID as provenance. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
+
+**Manual actions.** Three actions write records directly, including backfill with explicit timestamps:
+
+```yaml
+action: health_assistant.add_observation
+data:
+  metric: weight
+  value: 180.2
+  unit: lb
+  observed_at: "2024-11-02T07:30:00"
+  source: old spreadsheet
+```
+
+```yaml
+action: health_assistant.add_workout
+data:
+  workout_type: running
+  title: Morning run
+  start: "2026-08-20T07:00:00"
+  end: "2026-08-20T07:45:00"
+  distance: 5
+  distance_unit: km
+  energy_kcal: 400
+```
+
+`health_assistant.add_body_measurement` records weight, body fat, and lean mass sharing one timestamp. Passing an `external_id` makes repeated calls idempotent, so re-running a backfill script never duplicates records.
+
 ## Installation
 
 Not yet. Once the first release is tagged, Health Assistant will install as a custom HACS repository, and the instructions will live here.

@@ -1,0 +1,112 @@
+add_observation:
+  fields:
+    metric:
+      required: true
+      selector:
+        select:
+          options:
+            - weight
+            - body_fat_percentage
+            - lean_mass
+            - steps
+            - distance
+            - active_energy
+    value:
+      required: true
+      selector:
+        number:
+          mode: box
+          step: any
+    unit:
+      selector:
+        text:
+    observed_at:
+      selector:
+        datetime:
+    person_id:
+      selector:
+        text:
+    external_id:
+      selector:
+        text:
+    source:
+      selector:
+        text:
+
+add_body_measurement:
+  fields:
+    weight:
+      selector:
+        number:
+          mode: box
+          step: any
+    weight_unit:
+      selector:
+        text:
+    body_fat_percentage:
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+          step: any
+    lean_mass:
+      selector:
+        number:
+          mode: box
+          step: any
+    lean_mass_unit:
+      selector:
+        text:
+    observed_at:
+      selector:
+        datetime:
+    person_id:
+      selector:
+        text:
+    external_id:
+      selector:
+        text:
+    source:
+      selector:
+        text:
+
+add_workout:
+  fields:
+    workout_type:
+      required: true
+      selector:
+        text:
+    title:
+      selector:
+        text:
+    start:
+      required: true
+      selector:
+        datetime:
+    end:
+      required: true
+      selector:
+        datetime:
+    energy_kcal:
+      selector:
+        number:
+          mode: box
+          step: any
+    distance:
+      selector:
+        number:
+          mode: box
+          step: any
+    distance_unit:
+      selector:
+        text:
+    person_id:
+      selector:
+        text:
+    external_id:
+      selector:
+        text:
+    source:
+      selector:
+        text:

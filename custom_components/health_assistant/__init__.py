@@ -9,6 +9,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 
 from .const import DOMAIN
+from .ingest import EntityIngestion
+from .services import async_setup_services, async_unload_services
 from .store import HealthDatabase, HealthRepository, StoreError, StoreVersionError
 
 PLATFORMS: list[Platform] = []
@@ -18,6 +20,7 @@ PLATFORMS: list[Platform] = []
 class HealthAssistantData:
     database: HealthDatabase
     repository: HealthRepository
+    ingestion: EntityIngestion
 
 
 type HealthAssistantConfigEntry = ConfigEntry[HealthAssistantData]
@@ -37,11 +40,16 @@ async def async_setup_entry(
         raise ConfigEntryError(str(err)) from err
     except (StoreError, OSError) as err:
         raise ConfigEntryNotReady(str(err)) from err
+    repository = HealthRepository(database)
+    ingestion = EntityIngestion(hass, entry, repository)
     entry.runtime_data = HealthAssistantData(
-        database=database, repository=HealthRepository(database)
+        database=database, repository=repository, ingestion=ingestion
     )
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    entry.async_on_unload(ingestion.async_stop)
+    async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await ingestion.async_start()
     return True
 
 
@@ -50,6 +58,7 @@ async def async_unload_entry(
 ) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        async_unload_services(hass)
         await hass.async_add_executor_job(entry.runtime_data.database.close)
     return unload_ok
 

@@ -10,8 +10,22 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
-from .const import DOMAIN, NAME
+from .const import CONF_MAPPINGS, DOMAIN, NAME
+from .store import MetricType
+
+
+def _options_schema(options: dict[str, Any]) -> vol.Schema:
+    mappings = options.get(CONF_MAPPINGS, {})
+    return vol.Schema(
+        {
+            vol.Optional(
+                metric.value, default=list(mappings.get(metric.value, []))
+            ): EntitySelector(EntitySelectorConfig(domain="sensor", multiple=True))
+            for metric in MetricType
+        }
+    )
 
 
 class HealthAssistantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -37,5 +51,13 @@ class HealthAssistantOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is None:
-            return self.async_show_form(step_id="init", data_schema=vol.Schema({}))
-        return self.async_create_entry(data=user_input)
+            return self.async_show_form(
+                step_id="init",
+                data_schema=_options_schema(dict(self.config_entry.options)),
+            )
+        mappings = {
+            metric: entity_ids
+            for metric, entity_ids in user_input.items()
+            if entity_ids
+        }
+        return self.async_create_entry(data={CONF_MAPPINGS: mappings})

@@ -13,8 +13,140 @@
   "options": {
     "step": {
       "init": {
-        "title": "Health Assistant options",
-        "description": "There are no configurable options yet."
+        "title": "Entity mappings",
+        "description": "Map existing sensors to canonical health metrics. Mapped sensors are ingested into the local health store as their state changes.",
+        "data": {
+          "weight": "Weight sensors",
+          "body_fat_percentage": "Body fat percentage sensors",
+          "lean_mass": "Lean mass sensors",
+          "steps": "Step count sensors",
+          "distance": "Distance sensors",
+          "active_energy": "Active energy sensors"
+        }
+      }
+    }
+  },
+  "services": {
+    "add_observation": {
+      "name": "Add observation",
+      "description": "Writes a single health observation into the local health store.",
+      "fields": {
+        "metric": {
+          "name": "Metric",
+          "description": "Canonical metric to record."
+        },
+        "value": {
+          "name": "Value",
+          "description": "Measured value."
+        },
+        "unit": {
+          "name": "Unit",
+          "description": "Unit of the supplied value. Defaults to the metric's canonical unit."
+        },
+        "observed_at": {
+          "name": "Observed at",
+          "description": "When the measurement was taken. Defaults to now."
+        },
+        "person_id": {
+          "name": "Person",
+          "description": "Person identifier. Defaults to the primary person."
+        },
+        "external_id": {
+          "name": "External ID",
+          "description": "Stable source identifier. Supplying one makes repeated calls idempotent."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Free-form source label stored as provenance."
+        }
+      }
+    },
+    "add_body_measurement": {
+      "name": "Add body measurement",
+      "description": "Writes weight, body fat, and lean mass readings that share one timestamp.",
+      "fields": {
+        "weight": {
+          "name": "Weight",
+          "description": "Body weight value."
+        },
+        "weight_unit": {
+          "name": "Weight unit",
+          "description": "Unit of the weight value. Defaults to kilograms."
+        },
+        "body_fat_percentage": {
+          "name": "Body fat percentage",
+          "description": "Body fat as a percentage."
+        },
+        "lean_mass": {
+          "name": "Lean mass",
+          "description": "Lean mass value."
+        },
+        "lean_mass_unit": {
+          "name": "Lean mass unit",
+          "description": "Unit of the lean mass value. Defaults to kilograms."
+        },
+        "observed_at": {
+          "name": "Observed at",
+          "description": "When the measurements were taken. Defaults to now."
+        },
+        "person_id": {
+          "name": "Person",
+          "description": "Person identifier. Defaults to the primary person."
+        },
+        "external_id": {
+          "name": "External ID",
+          "description": "Stable source identifier shared by the readings."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Free-form source label stored as provenance."
+        }
+      }
+    },
+    "add_workout": {
+      "name": "Add workout",
+      "description": "Writes a workout into the local health store.",
+      "fields": {
+        "workout_type": {
+          "name": "Workout type",
+          "description": "Kind of workout, such as strength or running."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Optional display title."
+        },
+        "start": {
+          "name": "Start",
+          "description": "When the workout started."
+        },
+        "end": {
+          "name": "End",
+          "description": "When the workout ended."
+        },
+        "energy_kcal": {
+          "name": "Active energy",
+          "description": "Energy burned in kilocalories."
+        },
+        "distance": {
+          "name": "Distance",
+          "description": "Distance covered."
+        },
+        "distance_unit": {
+          "name": "Distance unit",
+          "description": "Unit of the distance value. Defaults to meters."
+        },
+        "person_id": {
+          "name": "Person",
+          "description": "Person identifier. Defaults to the primary person."
+        },
+        "external_id": {
+          "name": "External ID",
+          "description": "Stable source identifier. Supplying one makes repeated calls idempotent."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Free-form source label stored as provenance."
+        }
       }
     }
   }
