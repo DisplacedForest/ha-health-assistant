@@ -9,6 +9,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import Event, HomeAssistant, State, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     EventStateChangedData,
     async_track_state_change_event,
@@ -17,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_system import METRIC_SYSTEM
 
 from .const import CONF_MAPPINGS, PROVIDER_HA_ENTITY
+from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
     DEFAULT_PERSON_ID,
     HealthObservation,
@@ -132,3 +134,5 @@ class EntityIngestion:
             _LOGGER.debug(
                 "ignoring %s: rejected by store", state.entity_id, exc_info=True
             )
+            return
+        async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
