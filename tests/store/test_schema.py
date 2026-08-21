@@ -10,6 +10,8 @@ from custom_components.health_assistant.store import (
 from custom_components.health_assistant.store.schema import (
     MIGRATIONS,
     SCHEMA_VERSION,
+    apply_migrations,
+    current_version,
 )
 
 
@@ -65,6 +67,27 @@ def test_newer_schema_fails_safely_without_writing(tmp_path):
         db.execute("SELECT 1")
     assert table_names(path) == {"schema_info"}
     assert stored_version(path) == SCHEMA_VERSION + 1
+
+
+def test_failed_migration_rolls_back_completely(tmp_path):
+    path = tmp_path / "health.sqlite"
+    conn = sqlite3.connect(path)
+    broken = ((1, ("CREATE TABLE partial (id INTEGER)", "THIS IS NOT SQL")),)
+    with pytest.raises(sqlite3.OperationalError):
+        apply_migrations(conn, migrations=broken, latest=1)
+    assert current_version(conn) == 0
+    names = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+    assert "partial" not in names
+
+    fixed = ((1, ("CREATE TABLE partial (id INTEGER)",)),)
+    apply_migrations(conn, migrations=fixed, latest=1)
+    assert current_version(conn) == 1
+    conn.close()
 
 
 def test_migrations_are_append_only_and_ordered():

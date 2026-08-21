@@ -63,18 +63,27 @@ def current_version(conn: sqlite3.Connection) -> int:
     return int(row[0]) if row else 0
 
 
-def apply_migrations(conn: sqlite3.Connection) -> None:
+def apply_migrations(
+    conn: sqlite3.Connection,
+    migrations: tuple[tuple[int, tuple[str, ...]], ...] = MIGRATIONS,
+    latest: int = SCHEMA_VERSION,
+) -> None:
     version = current_version(conn)
-    if version > SCHEMA_VERSION:
+    if version > latest:
         raise StoreVersionError(
             f"database schema version {version} is newer than supported "
-            f"version {SCHEMA_VERSION}"
+            f"version {latest}"
         )
-    for target, statements in MIGRATIONS:
+    for target, statements in migrations:
         if target <= version:
             continue
-        with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
             for statement in statements:
                 conn.execute(statement)
             conn.execute("DELETE FROM schema_info")
             conn.execute("INSERT INTO schema_info (version) VALUES (?)", (target,))
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        conn.execute("COMMIT")
