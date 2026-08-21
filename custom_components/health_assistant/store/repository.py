@@ -22,6 +22,7 @@ from .models import (
 )
 from .reconciliation import (
     group_claims,
+    provider_rank,
     rule_for,
     supplying_claim,
     suspicious_group_indexes,
@@ -146,34 +147,62 @@ class HealthRepository:
         )
         return [self._claim_from_row(row) for row in rows]
 
-    def get_preferred_source(self, metric: MetricType) -> str | None:
+    def get_priority(self, metric: MetricType) -> list[str]:
         rows = self._db.execute(
-            "SELECT provider FROM metric_preferences WHERE metric = ?",
+            """
+            SELECT provider FROM metric_priorities
+            WHERE metric = ? AND context = ''
+            ORDER BY rank
+            """,
             (_require_metric(metric).value,),
         )
-        return rows[0]["provider"] if rows else None
+        return [row["provider"] for row in rows]
 
-    def set_preferred_source(self, metric: MetricType, provider: str | None) -> None:
+    def set_priority(self, metric: MetricType, providers: list[str]) -> None:
         metric = _require_metric(metric)
-        if provider is None:
-            self._db.execute(
-                "DELETE FROM metric_preferences WHERE metric = ?", (metric.value,)
+        cleaned = [_require_text(provider, "provider") for provider in providers]
+        if len(set(cleaned)) != len(cleaned):
+            raise StoreValidationError("priority order must not repeat a provider")
+        statements: list[tuple[str, tuple]] = [
+            (
+                "DELETE FROM metric_priorities WHERE metric = ? AND context = ''",
+                (metric.value,),
             )
-        else:
-            self._db.execute(
-                """
-                INSERT INTO metric_preferences (metric, provider)
-                VALUES (?, ?)
-                ON CONFLICT (metric) DO UPDATE SET provider = excluded.provider
-                """,
-                (metric.value, _require_text(provider, "provider")),
+        ]
+        for rank, provider in enumerate(cleaned):
+            statements.append(
+                (
+                    """
+                    INSERT INTO metric_priorities (metric, context, rank, provider)
+                    VALUES (?, '', ?, ?)
+                    """,
+                    (metric.value, rank, provider),
+                )
             )
+        self._db.execute_batch(statements)
         persons = self._db.execute(
             "SELECT DISTINCT person_id FROM source_claims WHERE metric = ?",
             (metric.value,),
         )
         for row in persons:
             self.reconcile_metric(row["person_id"], metric)
+
+    def ensure_provider_ranked(self, metric: MetricType, provider: str) -> None:
+        metric = _require_metric(metric)
+        self._db.execute(
+            """
+            INSERT INTO metric_priorities (metric, context, rank, provider)
+            SELECT ?, '', COALESCE(MAX(rank) + 1, 0), ?
+            FROM metric_priorities
+            WHERE metric = ? AND context = ''
+            ON CONFLICT (metric, context, provider) DO NOTHING
+            """,
+            (
+                metric.value,
+                _require_text(provider, "provider"),
+                metric.value,
+            ),
+        )
 
     def reconcile_metric(self, person_id: str, metric: MetricType) -> None:
         metric = _require_metric(metric)
@@ -216,7 +245,7 @@ class HealthRepository:
 
     def _apply_reconciliation(self, person_id, metric, claims, band_start, band_end):
         rule = rule_for(metric)
-        preferred = self.get_preferred_source(metric)
+        priority = self.get_priority(metric)
         groups = group_claims(claims, rule)
         flagged = suspicious_group_indexes(groups, rule)
         referenced = {
@@ -251,7 +280,7 @@ class HealthRepository:
                 for claim in group
                 if claim.observation_id is not None
             )
-            supplier = supplying_claim(group, preferred)
+            supplier = supplying_claim(group, priority)
             flag = 1 if index in flagged else 0
             desired = (
                 person_id,
@@ -350,6 +379,7 @@ class HealthRepository:
     def latest_observation(
         self, person_id: str, metric: MetricType
     ) -> HealthObservation | None:
+        metric = _require_metric(metric)
         rows = self._db.execute(
             _OBSERVATION_SELECT
             + """
@@ -357,9 +387,37 @@ class HealthRepository:
             ORDER BY o.observed_at DESC, o.id DESC
             LIMIT 1
             """,
-            (person_id, _require_metric(metric).value),
+            (person_id, metric.value),
         )
-        return self._observation_from_row(rows[0]) if rows else None
+        if not rows:
+            return None
+        newest = self._observation_from_row(rows[0])
+        rule = rule_for(metric)
+        if rule.merge_window is None:
+            return newest
+        contested = self._db.execute(
+            _OBSERVATION_SELECT
+            + """
+            WHERE o.person_id = ? AND o.metric = ? AND o.observed_at >= ?
+            """,
+            (
+                person_id,
+                metric.value,
+                _to_stored_datetime(newest.observed_at - rule.merge_window, "start"),
+            ),
+        )
+        candidates = [self._observation_from_row(row) for row in contested]
+        if len(candidates) <= 1:
+            return newest
+        priority = self.get_priority(metric)
+        return min(
+            candidates,
+            key=lambda observation: (
+                provider_rank(observation.provider, priority),
+                -observation.observed_at.timestamp(),
+                -(observation.id or 0),
+            ),
+        )
 
     def body_measurements(
         self,

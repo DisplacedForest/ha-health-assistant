@@ -44,6 +44,16 @@ What Health Assistant never does:
 - Diagnostics downloads are redacted by an allowlist: they contain record counts, schema version, provider names, mapping counts, and database health, never measurements, workout titles, or provenance payloads. Nothing appears in diagnostics unless it is explicitly named safe.
 - Uninstalling the integration never deletes your database.
 
+## Which source wins
+
+When more than one source reports the same metric, one documented rule decides the canonical value, and every surface (sensors, the panel, store queries) uses it.
+
+- Each metric has a source priority order. It starts from sensible defaults (sources are added to the order as they register, in setup order) and you can reorder it; the order lives in the local database alongside your data.
+- Two providers reporting the same physical measurement (inside a per-metric time window and value tolerance: for body measurements, 2 minutes and 0.5 kg or 1 percent, whichever is looser) collapse into one canonical observation that keeps both provenances. The highest-priority source supplies the value.
+- Readings inside the time window but outside the value tolerance are genuinely different: both records stay, both are flagged as possible duplicates, and the current value comes from the highest-priority source among the records contesting the newest timestamp. Ties break by newest observation, then stable record id.
+- Outside the contested window, normal time-series behavior applies: the newest observation is the current value regardless of priority.
+- Reordering priority never deletes anything. Alternate claims are retained and the canonical values re-derive from them.
+
 ## Architecture
 
 The integration is a HACS custom integration with the domain `health_assistant`:

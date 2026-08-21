@@ -159,7 +159,7 @@ def test_store_answers_which_source_supplies_the_value(repository):
     assert stored.sources == ("apple_health", "withings")
 
 
-def test_preferred_source_supplies_the_canonical_value(repository):
+def test_priority_order_supplies_the_canonical_value(repository):
     repository.upsert_observation(observation(provider="withings", value=80.0))
     repository.upsert_observation(
         observation(
@@ -169,13 +169,18 @@ def test_preferred_source_supplies_the_canonical_value(repository):
             observed_at=BASE + timedelta(seconds=30),
         )
     )
-    repository.set_preferred_source(MetricType.WEIGHT, "apple_health")
+    repository.set_priority(MetricType.WEIGHT, ["apple_health", "withings"])
     rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
     assert len(rows) == 1
     assert rows[0].value == 80.2
     assert rows[0].provider == "apple_health"
     assert rows[0].sources == ("apple_health", "withings")
-    repository.set_preferred_source(MetricType.WEIGHT, None)
+    repository.set_priority(MetricType.WEIGHT, ["withings", "apple_health"])
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert rows[0].provider == "withings"
+    assert rows[0].value == 80.0
+    assert repository.get_priority(MetricType.WEIGHT) == ["withings", "apple_health"]
+    repository.set_priority(MetricType.WEIGHT, [])
     rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
     assert rows[0].provider == "withings"
     assert rows[0].value == 80.0
@@ -344,3 +349,139 @@ def test_single_source_series_matches_pre_reconciliation_behavior(repository):
     latest = repository.latest_observation(DEFAULT_PERSON_ID, MetricType.WEIGHT)
     assert latest.value == 79.5
     assert latest.sources == ("withings",)
+
+
+def test_value_divergent_pair_coexists_and_resolves_by_priority(repository):
+    repository.upsert_observation(observation(provider="withings", value=80.0))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-1",
+            value=90.0,
+            observed_at=BASE + timedelta(seconds=30),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    assert all(row.possible_duplicate for row in rows)
+    repository.set_priority(MetricType.WEIGHT, ["withings", "apple_health"])
+    latest = repository.latest_observation(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert latest.provider == "withings"
+    assert latest.value == 80.0
+    repository.set_priority(MetricType.WEIGHT, ["apple_health", "withings"])
+    latest = repository.latest_observation(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert latest.provider == "apple_health"
+    assert latest.value == 90.0
+
+
+def test_value_tolerance_boundaries(repository):
+    repository.upsert_observation(observation(provider="withings", value=80.0))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-abs",
+            value=80.5,
+            observed_at=BASE + timedelta(seconds=10),
+        )
+    )
+    assert len(repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)) == 1
+
+    repository.upsert_observation(
+        observation(
+            provider="withings",
+            external_id="w-2",
+            value=100.0,
+            observed_at=BASE + timedelta(hours=2),
+        )
+    )
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-rel",
+            value=101.0,
+            observed_at=BASE + timedelta(hours=2, seconds=10),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 2
+    assert rows[1].sources == ("apple_health", "withings")
+
+    repository.upsert_observation(
+        observation(
+            provider="withings",
+            external_id="w-3",
+            value=100.0,
+            observed_at=BASE + timedelta(hours=4),
+        )
+    )
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-far",
+            value=101.1,
+            observed_at=BASE + timedelta(hours=4, seconds=10),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 4
+
+
+def test_reordering_priority_deletes_no_claims(repository, database):
+    repository.upsert_observation(observation(provider="withings", value=80.0))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-1",
+            value=80.2,
+            observed_at=BASE + timedelta(seconds=30),
+        )
+    )
+    before = database.execute("SELECT COUNT(*) AS n FROM source_claims")[0]["n"]
+    repository.set_priority(MetricType.WEIGHT, ["apple_health"])
+    repository.set_priority(MetricType.WEIGHT, ["withings"])
+    after = database.execute("SELECT COUNT(*) AS n FROM source_claims")[0]["n"]
+    assert before == after == 2
+
+
+def test_contested_current_value_prefers_priority_inside_window_only(repository):
+    repository.set_priority(MetricType.WEIGHT, ["withings", "apple_health"])
+    repository.upsert_observation(
+        observation(provider="withings", value=80.0, observed_at=BASE)
+    )
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-old",
+            value=90.0,
+            observed_at=BASE + timedelta(seconds=60),
+        )
+    )
+    latest = repository.latest_observation(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert latest.provider == "withings"
+
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-new",
+            value=91.0,
+            observed_at=BASE + timedelta(hours=3),
+        )
+    )
+    latest = repository.latest_observation(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert latest.provider == "apple_health"
+    assert latest.value == 91.0
+
+
+def test_unranked_defaults_keep_first_seen_supplier(repository):
+    repository.upsert_observation(observation(provider="withings", value=80.0))
+    repository.upsert_observation(
+        observation(
+            provider="apple_health",
+            external_id="a-1",
+            value=80.2,
+            observed_at=BASE + timedelta(seconds=30),
+        )
+    )
+    rows = repository.get_observations(DEFAULT_PERSON_ID, MetricType.WEIGHT)
+    assert len(rows) == 1
+    assert rows[0].provider == "withings"

@@ -117,7 +117,7 @@ def test_populated_v1_database_upgrades_to_current_version(tmp_path):
     rows = db.execute("SELECT * FROM observations")
     claims = db.execute("SELECT * FROM source_claims")
     state_rows = db.execute("SELECT * FROM provider_state")
-    preferences = db.execute("SELECT * FROM metric_preferences")
+    preferences = db.execute("SELECT * FROM metric_priorities")
     db.close()
     assert stored_version(path) == SCHEMA_VERSION
     assert [row["value"] for row in rows] == [80.0]
@@ -179,3 +179,26 @@ def test_migrations_are_append_only_and_ordered():
     assert len(versions) == len(set(versions))
     assert versions[-1] == SCHEMA_VERSION
     assert versions[0] == 1
+
+
+def test_populated_v3_preference_migrates_to_rank_zero(tmp_path):
+    path = tmp_path / "health.sqlite"
+    conn = sqlite3.connect(path)
+    apply_migrations(conn, migrations=MIGRATIONS[:3], latest=3)
+    conn.execute(
+        "INSERT INTO metric_preferences (metric, provider) VALUES ('weight', 'withings')"
+    )
+    conn.commit()
+    conn.close()
+
+    db = HealthDatabase(path)
+    db.open()
+    priorities = db.execute("SELECT * FROM metric_priorities")
+    db.close()
+    assert stored_version(path) == SCHEMA_VERSION
+    assert len(priorities) == 1
+    assert priorities[0]["metric"] == "weight"
+    assert priorities[0]["context"] == ""
+    assert priorities[0]["rank"] == 0
+    assert priorities[0]["provider"] == "withings"
+    assert "metric_preferences" not in table_names(path)

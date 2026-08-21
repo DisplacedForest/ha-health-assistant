@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -145,6 +145,26 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
                 provider TEXT NOT NULL
             )
             """,
+        ),
+    ),
+    (
+        4,
+        (
+            """
+            CREATE TABLE metric_priorities (
+                metric TEXT NOT NULL,
+                context TEXT NOT NULL DEFAULT '',
+                rank INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                PRIMARY KEY (metric, context, rank),
+                UNIQUE (metric, context, provider)
+            )
+            """,
+            """
+            INSERT INTO metric_priorities (metric, context, rank, provider)
+            SELECT metric, '', 0, provider FROM metric_preferences
+            """,
+            "DROP TABLE metric_preferences",
         ),
     ),
 )

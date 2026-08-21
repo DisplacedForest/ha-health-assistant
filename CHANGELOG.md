@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Cross-source conflict resolution: a configurable per-metric source priority order decides the canonical current value when sources disagree, semantic duplicate matching adds a per-metric value tolerance to the merge windows, and one resolution rule serves sensors, the panel, and store queries alike. Reordering priority re-resolves from retained claims with no data loss. The database migrates to schema version 4. Multi-source installs may see contested current values shift once when priority defaults first apply.
+
 - Source reconciliation: every incoming record is kept as a source claim, and cross-provider reports of the same physical measurement merge into one canonical observation carrying both provenances. Ambiguous near-matches are flagged as possible duplicates instead of being merged silently, a preferred source can be recorded per metric, and reconciliation is replayable with no claim ever deleted. The database migrates to schema version 3.
 
 ### Changed
