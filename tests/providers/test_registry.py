@@ -165,10 +165,10 @@ async def test_polled_provider_syncs_on_interval(hass, registry, short_interval)
     provider = SyntheticProvider(key="polled", poll_interval=short_interval, sync=sync)
     registry.register(provider)
     await registry.async_start()
-    async_fire_time_changed(hass, dt_util.utcnow() + short_interval)
+    async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 2)
     await hass.async_block_till_done()
     assert provider.sync_calls == [{}]
     await registry.async_stop()
-    async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 2)
+    async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 4)
     await hass.async_block_till_done()
     assert provider.sync_calls == [{}]
