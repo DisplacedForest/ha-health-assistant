@@ -27,10 +27,12 @@ Run before every push, from the repo root with the venv active:
 - `mise run ci`: what GitHub Actions runs on pull requests.
 - `mise run security`: semgrep plus dependency audit.
 
-CI is the authority. Until the integration bootstrap lands there are no
-GitHub Actions workflows; they arrive with the first integration code and
-must include ruff, pytest with pytest-homeassistant-custom-component, HACS
-validation, and hassfest.
+CI is the authority. GitHub Actions runs two workflows on every pull
+request: `ci.yml` (ruff format check, ruff lint, pytest with
+pytest-homeassistant-custom-component) and `validate.yml` (hassfest and
+HACS structure validation). `mise run ha` boots a disposable dockerized
+Home Assistant with `custom_components/` mounted for manual smoke tests;
+see CONTRIBUTING.md.
 
 ## Completion gate
 
