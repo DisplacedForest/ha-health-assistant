@@ -55,3 +55,8 @@ CLAUDE.local.md
 
 # mise
 .mise.local.toml
+
+# Agent instructions
+AGENTS.md
+CLAUDE.md
+AGENTS.MD
