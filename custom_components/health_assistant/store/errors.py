@@ -6,6 +6,10 @@ class StoreVersionError(StoreError):
     pass
 
 
+class StoreCorruptError(StoreError):
+    pass
+
+
 class StoreValidationError(StoreError):
     pass
 

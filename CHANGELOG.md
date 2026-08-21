@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-21
+
 ### Added
 
-- Integration skeleton with domain `health_assistant`: config flow with a single-instance guard, minimal options flow, setup/unload/reload lifecycle, diagnostics that report integration metadata only, and English translations.
+- Integration skeleton with domain `health_assistant`: config flow with a single-instance guard, minimal options flow, setup/unload/reload lifecycle, and English translations.
+- On-demand database backups via the `health_assistant.create_backup` action, producing a consistent timestamped copy under `.storage/health_assistant/backups/` through SQLite's online backup API, plus hooks that checkpoint the database when a native Home Assistant backup runs.
+- Redacted diagnostics built on an explicit allowlist: record counts, schema version, provider names, mapping counts, and database health are included; measurements, workout titles, and provenance payloads never are.
+- Corrupt or newer-version databases fail setup with a repair issue and are left untouched; the integration never resets health data to recover itself.
 - A dedicated Health sidebar panel with an overview of latest body metrics, today's activity, and the most recent workout, plus 7/30/90 day trend charts for every metric, per-value source indicators, empty-state guidance, and full offline operation. Data flows through a bounded WebSocket API with server-side downsampling.
 - Summary sensors under one Health Assistant device: current weight, current body fat, steps today, active energy today, latest workout, and workouts in the last 7 days. All read from the canonical store, update immediately after ingestion, survive restarts without replay, show unknown when no data exists, and follow the configured unit system for display.
 - Entity ingestion: map existing sensors to canonical metrics through the options flow; state changes are validated, unit-converted, and stored with entity provenance, and mapping changes apply without a restart.

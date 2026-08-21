@@ -7,15 +7,23 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import DOMAIN
 from .coordinator import HealthSummaryCoordinator
 from .ingest import EntityIngestion
 from .panel import async_register_panel, async_remove_panel
+from .paths import backup_directory, database_path
 from .services import async_setup_services, async_unload_services
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
-from .store import HealthDatabase, HealthRepository, StoreError, StoreVersionError
+from .store import (
+    HealthDatabase,
+    HealthRepository,
+    StoreCorruptError,
+    StoreError,
+    StoreVersionError,
+)
 from .websocket_api import async_register_websocket_api
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -32,8 +40,24 @@ class HealthAssistantData:
 type HealthAssistantConfigEntry = ConfigEntry[HealthAssistantData]
 
 
-def database_path(hass: HomeAssistant) -> Path:
-    return Path(hass.config.path(".storage", DOMAIN, "health.sqlite"))
+__all__ = ["backup_directory", "database_path"]
+
+ISSUE_DATABASE_CORRUPT = "database_corrupt"
+ISSUE_DATABASE_UNSUPPORTED = "database_unsupported_version"
+
+
+def _raise_database_issue(
+    hass: HomeAssistant, issue_id: str, path: Path, err: Exception
+) -> None:
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key=issue_id,
+        translation_placeholders={"path": str(path), "error": str(err)},
+    )
 
 
 async def async_setup_entry(
@@ -43,9 +67,15 @@ async def async_setup_entry(
     try:
         await hass.async_add_executor_job(database.open)
     except StoreVersionError as err:
+        _raise_database_issue(hass, ISSUE_DATABASE_UNSUPPORTED, database.path, err)
+        raise ConfigEntryError(str(err)) from err
+    except StoreCorruptError as err:
+        _raise_database_issue(hass, ISSUE_DATABASE_CORRUPT, database.path, err)
         raise ConfigEntryError(str(err)) from err
     except (StoreError, OSError) as err:
         raise ConfigEntryNotReady(str(err)) from err
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DATABASE_CORRUPT)
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_DATABASE_UNSUPPORTED)
     repository = HealthRepository(database)
     ingestion = EntityIngestion(hass, entry, repository)
     coordinator = HealthSummaryCoordinator(hass, entry, repository)

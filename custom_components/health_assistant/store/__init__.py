@@ -1,5 +1,6 @@
 from .db import HealthDatabase
 from .errors import (
+    StoreCorruptError,
     StoreError,
     StoreValidationError,
     StoreVersionError,
@@ -31,6 +32,7 @@ __all__ = [
     "HealthRepository",
     "MetricType",
     "RecordStatus",
+    "StoreCorruptError",
     "StoreError",
     "StoreValidationError",
     "StoreVersionError",

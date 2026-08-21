@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from .errors import StoreError
+from .errors import StoreCorruptError, StoreError
 from .schema import apply_migrations
 
 
@@ -31,6 +31,14 @@ class HealthDatabase:
                 conn.execute("PRAGMA journal_mode = WAL")
                 conn.execute("PRAGMA foreign_keys = ON")
                 apply_migrations(conn)
+            except StoreError:
+                conn.close()
+                raise
+            except sqlite3.DatabaseError as err:
+                conn.close()
+                raise StoreCorruptError(
+                    f"database at {self._path} is corrupt or unreadable: {err}"
+                ) from err
             except BaseException:
                 conn.close()
                 raise
@@ -42,6 +50,23 @@ class HealthDatabase:
                 return
             self._conn.close()
             self._conn = None
+
+    def backup(self, destination: Path) -> None:
+        with self._lock:
+            if self._conn is None:
+                raise StoreError("database is not open")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            target = sqlite3.connect(destination)
+            try:
+                self._conn.backup(target)
+            finally:
+                target.close()
+
+    def checkpoint(self) -> None:
+        with self._lock:
+            if self._conn is None:
+                raise StoreError("database is not open")
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def execute(self, sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
         with self._lock:
