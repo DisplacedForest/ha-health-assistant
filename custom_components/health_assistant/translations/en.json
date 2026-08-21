@@ -148,6 +148,20 @@
           "description": "Free-form source label stored as provenance."
         }
       }
+    },
+    "create_backup": {
+      "name": "Create backup",
+      "description": "Writes a consistent timestamped copy of the local health database into the integration's backups folder."
+    }
+  },
+  "issues": {
+    "database_corrupt": {
+      "title": "Health database cannot be opened",
+      "description": "The health database at {path} is corrupt or unreadable and Health Assistant refused to start rather than reset it. The file has not been modified. Restore a backup over it, or move it aside to start fresh, then reload the integration. Error: {error}"
+    },
+    "database_unsupported_version": {
+      "title": "Health database is from a newer version",
+      "description": "The health database at {path} was created by a newer version of Health Assistant. The file has not been modified. Upgrade the integration, or restore a backup that matches this version, then reload the integration. Error: {error}"
     }
   }
 }

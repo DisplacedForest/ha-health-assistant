@@ -1,13 +1,18 @@
 # Health Assistant for Home Assistant
 
+[![CI](https://img.shields.io/github/actions/workflow/status/DisplacedForest/ha-health-assistant/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/DisplacedForest/ha-health-assistant/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/release/DisplacedForest/ha-health-assistant.svg?style=for-the-badge&color=brightgreen)](https://github.com/DisplacedForest/ha-health-assistant/releases)
+[![Stars](https://img.shields.io/github/stars/DisplacedForest/ha-health-assistant?style=for-the-badge)](https://github.com/DisplacedForest/ha-health-assistant/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-health-assistant?style=for-the-badge)](https://github.com/DisplacedForest/ha-health-assistant/commits/main)
 [![License](https://img.shields.io/github/license/DisplacedForest/ha-health-assistant?style=for-the-badge)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
-A local-first personal health platform for Home Assistant, distributed through HACS.
+A local-first personal health platform for Home Assistant.
 
 Health Assistant normalizes health data from the sources you already have (HA sensors, smart scales, Apple Health and Health Connect bridges, fitness services, workout integrations) into a canonical local health store. It then exposes useful entities, events, automations, trends, and a dedicated Health panel in the sidebar.
 
-> **Status: pre-release.** The integration is under active development and is not installable yet. Watch this repo or check the releases page for the first tagged version.
+> **Status: early.** 0.1.x installs manually or as a custom HACS repository. Publication to the HACS default store is planned for 0.2.0 or later.
 
 ---
 
@@ -24,7 +29,20 @@ Health Assistant treats health as a first-class domain:
 
 ## Privacy
 
-Privacy by default. Health Assistant has no cloud component and requires no external service to run. Your health data stays on your Home Assistant instance unless you explicitly connect a provider that syncs with an outside service, and even then the canonical store remains local. Export and import are yours to control.
+Privacy by default. Health Assistant has no cloud component and requires no external service to run.
+
+What is stored, and where:
+
+- All health data lives in a single SQLite database at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory.
+- Each record holds the metric, value, unit, timestamp, person identifier, and provenance (which sensor or action produced it). Workouts additionally hold type, optional title, start, end, energy, and distance.
+- Backups you create land beside it under `.storage/health_assistant/backups/`.
+- Your entity-to-metric mappings live in the config entry options, in HA's normal storage.
+
+What Health Assistant never does:
+
+- It never sends your health data anywhere. There are no outbound connections, no telemetry, no analytics. Data only leaves your instance if you explicitly connect a future provider that syncs with an outside service, and even then the canonical store stays local.
+- Diagnostics downloads are redacted by an allowlist: they contain record counts, schema version, provider names, mapping counts, and database health, never measurements, workout titles, or provenance payloads. Nothing appears in diagnostics unless it is explicitly named safe.
+- Uninstalling the integration never deletes your database.
 
 ## Architecture
 
@@ -112,7 +130,38 @@ Each measurement sensor carries `observed_at`, `provider`, and `source` attribut
 
 ## Installation
 
-Not yet. Once the first release is tagged, Health Assistant will install as a custom HACS repository, and the instructions will live here.
+Health Assistant is not in the HACS default store yet; that's planned for 0.2.0 or later, after the provider framework lands. For 0.1.x, install it one of two ways.
+
+**As a custom HACS repository (recommended):**
+
+1. In HACS, open the three-dot menu and pick Custom repositories.
+2. Add `https://github.com/DisplacedForest/ha-health-assistant` with type Integration.
+3. Find Health Assistant in HACS, install it, and restart Home Assistant.
+
+**Manually:**
+
+1. Download the latest release from the [releases page](https://github.com/DisplacedForest/ha-health-assistant/releases).
+2. Copy `custom_components/health_assistant` into your config directory's `custom_components` folder.
+3. Restart Home Assistant.
+
+Either way, finish by adding the integration: Settings, then Devices & services, then Add integration, then Health Assistant.
+
+## Backup and restore
+
+Your health history deserves disaster recovery from day one, so 0.1 ships both paths.
+
+**Home Assistant backups** already cover you: the database lives in `.storage`, and Health Assistant checkpoints it when a native HA backup starts, so full and partial backups contain a consistent copy.
+
+**On-demand backups** come from the `health_assistant.create_backup` action. It uses SQLite's online backup API, so the copy is consistent even while data is being ingested, and writes a timestamped file under `.storage/health_assistant/backups/`. Call it from Developer tools, an automation, or a schedule. The action returns the path it wrote.
+
+**To restore:**
+
+1. Stop Home Assistant (or unload the Health Assistant config entry from Settings, then Devices & services).
+2. In `.storage/health_assistant/`, delete `health.sqlite-wal` and `health.sqlite-shm` if they exist.
+3. Copy the backup file over `.storage/health_assistant/health.sqlite`.
+4. Start Home Assistant (or reload the entry). The restored data appears immediately.
+
+If the database ever fails to open (corruption, or a file written by a newer version), Health Assistant refuses to start, raises a repair issue explaining what happened, and leaves the file exactly as it found it. It never resets your data to recover itself.
 
 ## Development
 

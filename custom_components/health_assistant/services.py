@@ -5,19 +5,28 @@ from datetime import datetime
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PROVIDER_MANUAL
+from .paths import backup_directory
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
     DEFAULT_PERSON_ID,
+    HealthDatabase,
     HealthObservation,
     HealthRepository,
     MetricType,
+    StoreError,
     StoreValidationError,
     UnitConversionError,
     Workout,
@@ -27,6 +36,9 @@ from .store.units import canonical_unit, convert
 SERVICE_ADD_OBSERVATION = "add_observation"
 SERVICE_ADD_BODY_MEASUREMENT = "add_body_measurement"
 SERVICE_ADD_WORKOUT = "add_workout"
+SERVICE_CREATE_BACKUP = "create_backup"
+
+CREATE_BACKUP_SCHEMA = vol.Schema({})
 
 ADD_OBSERVATION_SCHEMA = vol.Schema(
     {
@@ -78,6 +90,13 @@ def _repository(hass: HomeAssistant) -> HealthRepository:
     if not entries:
         raise ServiceValidationError("Health Assistant is not set up")
     return entries[0].runtime_data.repository
+
+
+def _database(hass: HomeAssistant) -> HealthDatabase:
+    entries = hass.config_entries.async_loaded_entries(DOMAIN)
+    if not entries:
+        raise ServiceValidationError("Health Assistant is not set up")
+    return entries[0].runtime_data.database
 
 
 def _as_utc(value: datetime | None) -> datetime:
@@ -182,6 +201,19 @@ async def _async_add_workout(call: ServiceCall) -> None:
     async_dispatcher_send(call.hass, SIGNAL_HEALTH_DATA_UPDATED)
 
 
+async def _async_create_backup(call: ServiceCall) -> ServiceResponse:
+    database = _database(call.hass)
+    stamp = dt_util.utcnow().strftime("%Y%m%d%H%M%S")
+    destination = backup_directory(call.hass) / f"health-{stamp}.sqlite"
+    try:
+        await call.hass.async_add_executor_job(database.backup, destination)
+    except (StoreError, OSError) as err:
+        raise HomeAssistantError(f"backup failed: {err}") from err
+    if call.return_response:
+        return {"path": str(destination)}
+    return None
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_ADD_OBSERVATION):
@@ -204,6 +236,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _async_add_workout,
         schema=ADD_WORKOUT_SCHEMA,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CREATE_BACKUP,
+        _async_create_backup,
+        schema=CREATE_BACKUP_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 @callback
@@ -211,3 +250,4 @@ def async_unload_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_ADD_OBSERVATION)
     hass.services.async_remove(DOMAIN, SERVICE_ADD_BODY_MEASUREMENT)
     hass.services.async_remove(DOMAIN, SERVICE_ADD_WORKOUT)
+    hass.services.async_remove(DOMAIN, SERVICE_CREATE_BACKUP)
