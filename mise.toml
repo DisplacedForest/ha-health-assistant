@@ -15,3 +15,13 @@ depends = ["check"]
 
 [tasks.security]
 run = "semgrep scan --config auto --error"
+
+[tasks.ha]
+run = """
+mkdir -p .ha-dev
+docker run --rm -it --name health-assistant-dev \
+  -p 8123:8123 \
+  -v "$PWD/.ha-dev:/config" \
+  -v "$PWD/custom_components:/config/custom_components" \
+  ghcr.io/home-assistant/home-assistant:stable
+"""

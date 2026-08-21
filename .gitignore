@@ -43,6 +43,7 @@ venv/
 # Home Assistant
 *.db
 *.log
+.ha-dev/
 
 # Worktrees
 .worktrees/

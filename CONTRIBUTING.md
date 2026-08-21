@@ -25,6 +25,18 @@ mise run ci         # exactly what GitHub Actions runs
 
 Everything must be green before you push.
 
+## Local Home Assistant instance
+
+Unit tests are not enough; changes should be smoke-tested against a real Home Assistant. With Docker running:
+
+```bash
+mise run ha
+```
+
+This boots a disposable Home Assistant (`ghcr.io/home-assistant/home-assistant:stable`) on http://localhost:8123 with this repo's `custom_components/` mounted into its config. Configuration persists in a gitignored `.ha-dev/` directory, so onboarding only happens once; delete `.ha-dev/` for a truly clean instance.
+
+To pick up code changes, restart the container (Ctrl+C, then `mise run ha` again). Add the integration from Settings, then Devices & services, then Add integration, then search for Health Assistant.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.

@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Health Assistant",
+        "description": "Set up Health Assistant. All health data stays local to this Home Assistant instance."
+      }
+    },
+    "abort": {
+      "already_configured": "Health Assistant is already configured. Only one instance is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Health Assistant options",
+        "description": "There are no configurable options yet."
+      }
+    }
+  }
+}
