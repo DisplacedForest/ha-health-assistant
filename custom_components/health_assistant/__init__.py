@@ -12,9 +12,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import DOMAIN
 from .coordinator import HealthSummaryCoordinator
-from .ingest import EntityIngestion
 from .panel import async_register_panel, async_remove_panel
 from .paths import backup_directory, database_path
+from .providers import EntityProvider, ManualProvider, ProviderRegistry
 from .services import async_setup_services, async_unload_services
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
@@ -33,7 +33,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 class HealthAssistantData:
     database: HealthDatabase
     repository: HealthRepository
-    ingestion: EntityIngestion
+    registry: ProviderRegistry
     coordinator: HealthSummaryCoordinator
 
 
@@ -77,12 +77,14 @@ async def async_setup_entry(
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DATABASE_CORRUPT)
     ir.async_delete_issue(hass, DOMAIN, ISSUE_DATABASE_UNSUPPORTED)
     repository = HealthRepository(database)
-    ingestion = EntityIngestion(hass, entry, repository)
+    registry = ProviderRegistry(hass, repository)
+    registry.register(EntityProvider(hass, entry))
+    registry.register(ManualProvider())
     coordinator = HealthSummaryCoordinator(hass, entry, repository)
     entry.runtime_data = HealthAssistantData(
         database=database,
         repository=repository,
-        ingestion=ingestion,
+        registry=registry,
         coordinator=coordinator,
     )
     await coordinator.async_config_entry_first_refresh()
@@ -91,7 +93,6 @@ async def async_setup_entry(
         await coordinator.async_refresh()
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-    entry.async_on_unload(ingestion.async_stop)
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_HEALTH_DATA_UPDATED, _async_data_updated)
     )
@@ -99,7 +100,7 @@ async def async_setup_entry(
     async_register_websocket_api(hass)
     await async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await ingestion.async_start()
+    await registry.async_start()
     return True
 
 
@@ -108,6 +109,7 @@ async def async_unload_entry(
 ) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        await entry.runtime_data.registry.async_stop()
         async_remove_panel(hass)
         async_unload_services(hass)
         await hass.async_add_executor_job(entry.runtime_data.database.close)

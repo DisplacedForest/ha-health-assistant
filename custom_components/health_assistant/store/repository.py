@@ -260,6 +260,43 @@ class HealthRepository:
         )
         return self._workout_from_row(rows[0]) if rows else None
 
+    def get_provider_state(self, provider: str) -> dict[str, Any]:
+        rows = self._db.execute(
+            "SELECT state FROM provider_state WHERE provider = ?",
+            (_require_text(provider, "provider"),),
+        )
+        if not rows:
+            return {}
+        state = json.loads(rows[0]["state"])
+        if not isinstance(state, dict):
+            raise StoreValidationError(
+                f"stored state for provider {provider!r} is not a dict"
+            )
+        return state
+
+    def set_provider_state(self, provider: str, state: dict[str, Any]) -> None:
+        if not isinstance(state, dict):
+            raise StoreValidationError("provider state must be a dict")
+        try:
+            stored = json.dumps(state, sort_keys=True)
+        except (TypeError, ValueError) as err:
+            raise StoreValidationError(
+                "provider state must be JSON-serializable"
+            ) from err
+        self._db.execute(
+            """
+            INSERT INTO provider_state (provider, state, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT (provider)
+            DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
+            """,
+            (
+                _require_text(provider, "provider"),
+                stored,
+                datetime.now(UTC).isoformat(timespec="microseconds"),
+            ),
+        )
+
     def _observation_from_row(self, row: Any) -> HealthObservation:
         return HealthObservation(
             person_id=row["person_id"],

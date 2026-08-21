@@ -59,6 +59,14 @@ mise run install-dev
 
 This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. The production copy is never installed this way; it comes from HACS.
 
+## Providers
+
+Data sources are provider adapters in `custom_components/health_assistant/providers/`. The contract is internal and may change between minor versions; there is no external plugin SDK yet.
+
+A provider declares a stable key, a display name, and capabilities (which metrics it covers, whether it handles workouts, import vs export). It never touches SQLite or the repository directly: the only write path is the `ProviderSink` handed to it by the registry, which normalizes units, validates, stamps provenance, and stores through the canonical ingestion path. Push-style providers subscribe in `async_start`; polled providers implement `async_sync` and get a persisted state blob for their cursor, saved only after the sync batch lands. A provider that raises, hangs, or produces invalid records is marked degraded and isolated; it must never take down its siblings or the panel.
+
+To add a provider, implement the contract and register it in the integration setup. If a new provider needs edits through core modules, that is a bug in the framework, not a convention to follow.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.

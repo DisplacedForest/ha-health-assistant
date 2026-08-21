@@ -14,24 +14,19 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PROVIDER_MANUAL
 from .paths import backup_directory
-from .signals import SIGNAL_HEALTH_DATA_UPDATED
+from .providers import CandidateObservation, CandidateWorkout, ProviderSink
 from .store import (
     DEFAULT_PERSON_ID,
     HealthDatabase,
-    HealthObservation,
-    HealthRepository,
     MetricType,
     StoreError,
     StoreValidationError,
     UnitConversionError,
-    Workout,
 )
-from .store.units import canonical_unit, convert
 
 SERVICE_ADD_OBSERVATION = "add_observation"
 SERVICE_ADD_BODY_MEASUREMENT = "add_body_measurement"
@@ -85,11 +80,11 @@ ADD_WORKOUT_SCHEMA = vol.Schema(
 )
 
 
-def _repository(hass: HomeAssistant) -> HealthRepository:
+def _sink(hass: HomeAssistant) -> ProviderSink:
     entries = hass.config_entries.async_loaded_entries(DOMAIN)
     if not entries:
         raise ServiceValidationError("Health Assistant is not set up")
-    return entries[0].runtime_data.repository
+    return entries[0].runtime_data.registry.sink(PROVIDER_MANUAL)
 
 
 def _database(hass: HomeAssistant) -> HealthDatabase:
@@ -110,38 +105,26 @@ def _provenance(data: dict[str, Any]) -> dict[str, Any]:
     return {"source": source} if source else {}
 
 
-def _convert(value: float, unit: str | None, metric: MetricType) -> float:
-    try:
-        return convert(value, unit or canonical_unit(metric), canonical_unit(metric))
-    except UnitConversionError as err:
-        raise ServiceValidationError(str(err)) from err
-
-
-async def _async_store_observation(
-    hass: HomeAssistant, observation: HealthObservation
+async def _async_submit_observation(
+    hass: HomeAssistant, candidate: CandidateObservation
 ) -> None:
-    repository = _repository(hass)
     try:
-        await hass.async_add_executor_job(repository.upsert_observation, observation)
-    except StoreValidationError as err:
+        await _sink(hass).async_add_observation(candidate)
+    except (UnitConversionError, StoreValidationError) as err:
         raise ServiceValidationError(str(err)) from err
-    async_dispatcher_send(hass, SIGNAL_HEALTH_DATA_UPDATED)
 
 
 async def _async_add_observation(call: ServiceCall) -> None:
     data = call.data
-    metric = MetricType(data["metric"])
-    await _async_store_observation(
+    await _async_submit_observation(
         call.hass,
-        HealthObservation(
-            person_id=data["person_id"],
-            metric=metric,
-            value=_convert(data["value"], data.get("unit"), metric),
-            unit=canonical_unit(metric),
+        CandidateObservation(
+            metric=MetricType(data["metric"]),
+            value=data["value"],
+            unit=data.get("unit"),
             observed_at=_as_utc(data.get("observed_at")),
-            provider=PROVIDER_MANUAL,
             external_id=data.get("external_id") or uuid.uuid4().hex,
-            ingested_at=dt_util.utcnow(),
+            person_id=data["person_id"],
             provenance=_provenance(data),
         ),
     )
@@ -159,17 +142,15 @@ async def _async_add_body_measurement(call: ServiceCall) -> None:
     for metric, (value, unit) in values.items():
         if value is None:
             continue
-        await _async_store_observation(
+        await _async_submit_observation(
             call.hass,
-            HealthObservation(
-                person_id=data["person_id"],
+            CandidateObservation(
                 metric=metric,
-                value=_convert(value, unit, metric),
-                unit=canonical_unit(metric),
+                value=value,
+                unit=unit,
                 observed_at=observed_at,
-                provider=PROVIDER_MANUAL,
                 external_id=f"{base_id}-{metric.value}",
-                ingested_at=dt_util.utcnow(),
+                person_id=data["person_id"],
                 provenance=_provenance(data),
             ),
         )
@@ -177,28 +158,22 @@ async def _async_add_body_measurement(call: ServiceCall) -> None:
 
 async def _async_add_workout(call: ServiceCall) -> None:
     data = call.data
-    distance = data.get("distance")
-    workout = Workout(
-        person_id=data["person_id"],
-        provider=PROVIDER_MANUAL,
-        external_id=data.get("external_id") or uuid.uuid4().hex,
+    candidate = CandidateWorkout(
         workout_type=data["workout_type"],
         title=data.get("title"),
         started_at=_as_utc(data["start"]),
         ended_at=_as_utc(data["end"]),
         energy_kcal=data.get("energy_kcal"),
-        distance_m=None
-        if distance is None
-        else _convert(distance, data.get("distance_unit"), MetricType.DISTANCE),
-        ingested_at=dt_util.utcnow(),
+        distance=data.get("distance"),
+        distance_unit=data.get("distance_unit"),
+        external_id=data.get("external_id") or uuid.uuid4().hex,
+        person_id=data["person_id"],
         provenance=_provenance(data),
     )
-    repository = _repository(call.hass)
     try:
-        await call.hass.async_add_executor_job(repository.upsert_workout, workout)
-    except StoreValidationError as err:
+        await _sink(call.hass).async_add_workout(candidate)
+    except (UnitConversionError, StoreValidationError) as err:
         raise ServiceValidationError(str(err)) from err
-    async_dispatcher_send(call.hass, SIGNAL_HEALTH_DATA_UPDATED)
 
 
 async def _async_create_backup(call: ServiceCall) -> ServiceResponse:
