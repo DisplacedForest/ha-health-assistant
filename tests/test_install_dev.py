@@ -35,8 +35,9 @@ def test_install_dev_rewrites_domain(tmp_path):
     translations = json.loads((dest / "translations" / "en.json").read_text())
     assert "Health Assistant (Dev)" in translations["config"]["step"]["user"]["title"]
 
+    assert (dest / "services.yaml").exists()
     for path in dest.rglob("*"):
-        if path.suffix in {".py", ".json"}:
+        if path.suffix in {".py", ".json", ".yaml"}:
             text = path.read_text().replace("health_assistant_dev", "")
             assert "health_assistant" not in text
             assert "Health Assistant (Dev) (Dev)" not in path.read_text()

@@ -1,2 +1,5 @@
 DOMAIN = "health_assistant"
 NAME = "Health Assistant"
+CONF_MAPPINGS = "mappings"
+PROVIDER_HA_ENTITY = "ha_entity"
+PROVIDER_MANUAL = "manual"
