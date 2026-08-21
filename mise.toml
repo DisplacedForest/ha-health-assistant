@@ -16,6 +16,9 @@ depends = ["check"]
 [tasks.security]
 run = "semgrep scan --config auto --error"
 
+[tasks.install-dev]
+run = "bash scripts/install_dev.sh"
+
 [tasks.ha]
 run = """
 mkdir -p .ha-dev
