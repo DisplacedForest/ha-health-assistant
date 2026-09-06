@@ -7,8 +7,30 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .const import CONF_MAPPINGS, DOMAIN
+from .providers import ProviderRegistry
 from .store import HealthDatabase, MetricType
 from .store.schema import SCHEMA_VERSION
+
+
+def _collect_provider_facts(registry: ProviderRegistry) -> dict[str, Any]:
+    facts = {}
+    for key, provider in sorted(registry.providers.items()):
+        capabilities = provider.capabilities
+        status = registry.status(key)
+        facts[key] = {
+            "capabilities": {
+                "metrics": sorted(metric.value for metric in capabilities.metrics),
+                "workouts": capabilities.workouts,
+                "can_import": capabilities.can_import,
+                "can_export": capabilities.can_export,
+            },
+            "degraded": status.degraded,
+            "last_success": (
+                status.last_success.isoformat() if status.last_success else None
+            ),
+            "last_error": "provider_error" if status.last_error is not None else None,
+        }
+    return facts
 
 
 def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
@@ -65,4 +87,5 @@ async def async_get_config_entry_diagnostics(
         "entry_state": str(entry.state),
         "mapped_entity_counts": mapping_counts,
         "database": database_facts,
+        "providers": _collect_provider_facts(entry.runtime_data.registry),
     }

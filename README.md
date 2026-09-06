@@ -41,7 +41,7 @@ What is stored, and where:
 What Health Assistant never does:
 
 - It never sends your health data anywhere. There are no outbound connections, no telemetry, no analytics. Data only leaves your instance if you explicitly connect a future provider that syncs with an outside service, and even then the canonical store stays local.
-- Diagnostics downloads are redacted by an allowlist: they contain record counts, schema version, provider names, mapping counts, and database health, never measurements, workout titles, or provenance payloads. Nothing appears in diagnostics unless it is explicitly named safe.
+- Diagnostics downloads include record counts, schema version, provider keys and capabilities, mapping counts, and database health. Provider status includes whether it is degraded and when an operation last succeeded. That timestamp is not the time of the latest measurement. Status starts fresh when the integration reloads. A previous failure appears as `provider_error`, even after recovery; the degraded flag tells you whether the provider has recovered. Raw errors, measurements, workout titles, provider cursors, and provenance payloads are excluded.
 - Uninstalling the integration never deletes your database.
 
 ## Which source wins
