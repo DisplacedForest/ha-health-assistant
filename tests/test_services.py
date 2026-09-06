@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 import voluptuous as vol
+import yaml
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.health_assistant.const import DOMAIN, PROVIDER_MANUAL
@@ -168,3 +170,17 @@ async def test_services_lifecycle(hass, config_entry):
     await hass.async_block_till_done()
     assert not hass.services.has_service(DOMAIN, "add_observation")
     assert not hass.services.has_service(DOMAIN, "add_workout")
+
+
+def test_service_metric_selector_matches_enum():
+    path = (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "health_assistant"
+        / "services.yaml"
+    )
+    services = yaml.safe_load(path.read_text())
+    options = services["add_observation"]["fields"]["metric"]["selector"]["select"][
+        "options"
+    ]
+    assert sorted(options) == sorted(metric.value for metric in MetricType)

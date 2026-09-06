@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A sensor mapped to more than one metric now updates all of them. Previously, only the last mapping was used. Existing mappings keep working without any setup changes.
+
 ### Added
 
 - Diagnostics now show which sources are working, what they can import or export, and when an operation last succeeded. Error details stay out of the download to avoid exposing health data.
