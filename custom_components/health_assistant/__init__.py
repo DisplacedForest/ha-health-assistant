@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from awesomeversion import AwesomeVersion
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
@@ -12,6 +14,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import CONF_HEVY_SOURCE, CONF_SOURCE_MAPPINGS, DOMAIN
 from .coordinator import HealthSummaryCoordinator
+from .environment import CONF_ENVIRONMENT, EnvironmentalCapture
 from .panel import async_register_panel, async_remove_panel
 from .paths import backup_directory, database_path
 from .providers import EntityProvider, ManualProvider, ProviderRegistry
@@ -37,6 +40,7 @@ class HealthAssistantData:
     repository: HealthRepository
     registry: ProviderRegistry
     coordinator: HealthSummaryCoordinator
+    environment: EnvironmentalCapture
 
 
 type HealthAssistantConfigEntry = ConfigEntry[HealthAssistantData]
@@ -65,6 +69,10 @@ def _raise_database_issue(
 async def async_setup_entry(
     hass: HomeAssistant, entry: HealthAssistantConfigEntry
 ) -> bool:
+    if AwesomeVersion(HA_VERSION) < AwesomeVersion("2026.8.0"):
+        raise ConfigEntryError(
+            "Health Assistant requires Home Assistant 2026.8.0 or later. Upgrade Home Assistant before setup."
+        )
     database = HealthDatabase(database_path(hass))
     try:
         await hass.async_add_executor_job(database.open)
@@ -89,11 +97,15 @@ async def async_setup_entry(
             HevyProvider(hass, binding, lambda: registry.async_sync("hevy"))
         )
     coordinator = HealthSummaryCoordinator(hass, entry, repository)
+    environment = EnvironmentalCapture(
+        hass, database, entry.options.get(CONF_ENVIRONMENT, []), entry.entry_id
+    )
     entry.runtime_data = HealthAssistantData(
         database=database,
         repository=repository,
         registry=registry,
         coordinator=coordinator,
+        environment=environment,
     )
     await coordinator.async_config_entry_first_refresh()
 
@@ -109,6 +121,7 @@ async def async_setup_entry(
     await async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await registry.async_start()
+    await environment.async_start()
     return True
 
 
@@ -117,6 +130,7 @@ async def async_unload_entry(
 ) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        await entry.runtime_data.environment.async_stop()
         await entry.runtime_data.registry.async_stop()
         async_remove_panel(hass)
         async_unload_services(hass)
