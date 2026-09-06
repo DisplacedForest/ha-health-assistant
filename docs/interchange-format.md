@@ -73,7 +73,7 @@ There is exactly one maintenance row with `id: 1`. Last success and duration may
 
 Health claims match by provider, external ID, metric and observation time. Workouts match by provider and external ID. A matching identity belonging to a different person is rejected. For the same identity, the later `ingested_at` wins; an equal timestamp uses the incoming record. If either side is excluded, the merged record is excluded. Reconciliation also preserves exclusions across the resulting canonical group. Import never uses a replay to restore an excluded reading.
 
-Existing records absent from the archive are retained. Repeating the same archive against an unchanged destination produces no creates or merges. Overlapping exports merge by the same identities rather than adding copies. Priorities are imported before claims and can change which retained source supplies a current value.
+Existing records absent from the archive are retained. Repeating the same archive against an unchanged destination produces no creates or merges. Overlapping exports merge by the same identities rather than adding copies. Imported priorities are used for final reconciliation and can change which retained source supplies a current value.
 
 Environmental public IDs must have identical metadata on both sides. The registry remains capped at 256 active or historical streams. Bucket identity is the mapped stream, resolution and start time. Identical buckets are unchanged. A later `updated_ms` wins at the same resolution; equal update bounds with different contents are rejected as ambiguous. This time bound is not a general provider revision number.
 
