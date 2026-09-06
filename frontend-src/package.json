@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "esbuild src/panel.js --bundle --format=esm --minify --outfile=../custom_components/health_assistant/frontend/dist/panel.js",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "lit": "^3.3.0"

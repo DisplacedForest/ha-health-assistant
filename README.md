@@ -33,7 +33,9 @@ An excluded reading stays in your local history and keeps its source information
 
 Exclusion follows the source records behind a measurement. Replaying those records or changing source priority does not bring the reading back. A new source report that merges into the same measurement inherits its exclusion. A distinct reading remains visible. Matching still depends on the source identity, timestamp and metric's reconciliation rules; a source that presents a bad reading as a different measurement may need another exclusion.
 
-The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` provide this behavior. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. Changes require a Home Assistant administrator. The command accepts `observation_id` and an `excluded` boolean. Full value editing and permanent erasure are not available in this release.
+Open a metric in the Health panel, choose a reading, and select **Exclude reading**. To bring one back, turn on **Excluded only**, open the reading, and select **Restore reading**. These controls require a Home Assistant administrator. Full value editing and permanent erasure are not available in this release.
+
+The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` expose the same behavior for tools. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. The change command accepts `observation_id` and an `excluded` boolean.
 
 ## Privacy
 
@@ -165,13 +167,29 @@ data:
 
 ## The Health panel
 
+![Health Overview with synthetic readings, dark tablet layout](docs/images/overview-dark-tablet.png)
+
 Configuring Health Assistant adds a Health entry to the sidebar, no manual resource registration needed. The panel is a real application view over the canonical store, served entirely from your instance and fully functional offline:
 
-- **Overview**: latest body metrics, today's activity, and the most recent workout, each with a source line showing exactly which provider and sensor produced the value.
+- **Overview**: leads with a change in your record, then keeps quieter metrics in compact rows. Each reading has a recent trend, its source and observation time. Metrics without data stay collapsed. The workout strip covers the last seven days.
 - **Trends**: weight, body fat, lean mass, steps, distance, and active energy over 7, 30, or 90 days, drawn as lightweight SVG charts.
 - Values display in your configured unit system; empty states point you at entity mapping and the manual actions.
+- Manual entry times use your browser's local timezone and are sent with an explicit offset-equivalent UTC timestamp.
 
 Data reaches the panel through a dedicated WebSocket API with bounded queries and server-side downsampling. The frontend never touches the database, and the backend never renders.
+
+Select a metric to inspect its readings. The detail view shows the claim supplying the selected record, the other retained claims, and nearby readings that may explain a disagreement. It also provides exclusion and restoration controls. The Sources disclosure shows current source health and the last successful operation, which is separate from the age of a measurement. The view refreshes every minute while open, or immediately when you press Refresh.
+
+Comparisons have deliberately narrow meanings:
+
+- Weight, body fat and lean mass compare the latest reading with the closest reading to seven days earlier, within a five-to-nine-day window. Different sources or a source conflict suppress the delta.
+- Steps, distance and active energy compare yesterday's recorded maximum with the day before. These are recorded counter totals, not proof that a tracker covered the full day. Today's partial count is never compared with a completed day. Local calendar boundaries follow Home Assistant's timezone.
+- Missing comparison readings produce no delta. Chart lines break at source changes. Body fat differences are percentage points.
+- Body measurements older than 14 days and activity readings older than 36 hours are marked as older readings. These are display defaults, not recommendations about measurement frequency.
+
+Source conflicts and source changes come first among fresh readings. Other fresh changes sort ahead of quiet metrics when they reach 0.5 kg for weight or lean mass, 0.5 percentage points for body fat, 1,000 steps, 1 km, or 100 kcal. Larger changes relative to those thresholds come first; ties and quiet metrics use a stable metric order. Stale readings follow fresh ones. These thresholds organize the display and say nothing about medical significance.
+
+The Overview carries at most 120 chart points per metric, eight recent workouts and 32 source statuses. Reading detail carries at most 50 claims and 25 nearby readings; history loads in pages of 20. Arbitrary provider metadata is not copied into the panel payload.
 
 ## Entities
 

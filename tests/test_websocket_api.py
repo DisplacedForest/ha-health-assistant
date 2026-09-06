@@ -24,6 +24,53 @@ async def test_summary_empty_store(hass, hass_ws_client, config_entry):
     assert msg["result"]["workouts_last_7_days"] is None
 
 
+async def test_overview_and_record_detail(hass, hass_ws_client, config_entry):
+    await setup_integration(hass, config_entry)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_body_measurement",
+        {"weight": 80, "external_id": "detail"},
+        blocking=True,
+    )
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/overview"})
+    response = await client.receive_json()
+    assert response["success"]
+    result = response["result"]
+    assert len(result["metrics"]) == 6
+    assert result["metrics"][0]["current"]["value"] == 80
+    assert result["metrics"][0]["delta"] is None
+    assert all(len(item["points"]) <= 120 for item in result["metrics"])
+    assert set(result["providers"][0]) == {
+        "key",
+        "name",
+        "degraded",
+        "last_success",
+        "had_error",
+    }
+    observation_id = result["metrics"][0]["current"]["id"]
+    await client.send_json(
+        {
+            "id": 2,
+            "type": f"{DOMAIN}/observation_detail",
+            "observation_id": observation_id,
+        }
+    )
+    detail = (await client.receive_json())["result"]
+    assert detail["observation"]["id"] == observation_id
+    assert detail["claims"][0]["selected"]
+    assert detail["claims"][0]["external_id"] == "detail-weight"
+    assert "provenance" not in detail["claims"][0]
+    await client.send_json(
+        {"id": 3, "type": f"{DOMAIN}/observation_detail", "observation_id": 999999}
+    )
+    assert (await client.receive_json())["error"]["code"] == "not_found"
+    await client.send_json(
+        {"id": 4, "type": f"{DOMAIN}/observation_detail", "observation_id": True}
+    )
+    assert not (await client.receive_json())["success"]
+
+
 async def test_summary_populated(hass, hass_ws_client, config_entry):
     await setup_integration(hass, config_entry)
     await hass.services.async_call(

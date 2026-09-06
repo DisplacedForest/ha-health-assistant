@@ -463,17 +463,22 @@ class HealthRepository:
         return [self._observation_from_row(r) for r in self._db.execute(sql, params)]
 
     def latest_observation(
-        self, person_id: str, metric: MetricType
+        self, person_id: str, metric: MetricType, end: datetime | None = None
     ) -> HealthObservation | None:
         metric = _require_metric(metric)
+        end_time = (
+            _to_stored_datetime(end, "end")
+            if end is not None
+            else "9999-12-31T23:59:59.999999+00:00"
+        )
         rows = self._db.execute(
             _OBSERVATION_SELECT
             + """
-            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ?
+            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ? AND o.observed_at <= ?
             ORDER BY o.observed_at DESC, o.id DESC
             LIMIT 1
             """,
-            (person_id, metric.value),
+            (person_id, metric.value, end_time),
         )
         if not rows:
             return None
@@ -484,12 +489,13 @@ class HealthRepository:
         contested = self._db.execute(
             _OBSERVATION_SELECT
             + """
-            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ? AND o.observed_at >= ?
+            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ? AND o.observed_at >= ? AND o.observed_at <= ?
             """,
             (
                 person_id,
                 metric.value,
                 _to_stored_datetime(newest.observed_at - rule.merge_window, "start"),
+                end_time,
             ),
         )
         candidates = [self._observation_from_row(row) for row in contested]
