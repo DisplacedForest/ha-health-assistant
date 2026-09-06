@@ -98,6 +98,7 @@ Core concepts:
 | --- | --- | --- |
 | Withings | Weight, body fat percentage, lean mass, steps, distance | Uses the standard Home Assistant integration's registered sensor identifiers. Active energy is not mapped because its advertised calorie unit needs a verified conversion. |
 | Fitbit | Weight, body fat percentage, steps, distance | Uses the standard Home Assistant integration. Tracker-only variants and calorie sensors are not mapped automatically. |
+| Hevy Tracker | Latest completed workout and its available exercise sets | Choose the workout account explicitly. No history import, live sessions, or body-measurement export. |
 | Garmin Connect | Detection only for the `garmin_connect` integration domain | Use manual entity mapping. No sensor contract has been verified yet. |
 | Apple Health / Health Connect bridges | Detection only for `apple_health` and `health_connect` integration domains | Other bridges use manual mapping. There is no shared bridge entity contract yet. |
 | Other registered providers | Declared metric coverage appears in the same options chooser | The adapter must be registered and support importing that metric. |
@@ -107,6 +108,14 @@ The source list shows the actual entities and warns about missing, disabled, una
 Choosing a source puts it first in that metric's existing priority order. The database holds that order; there is no separate setup preference to keep in sync. Choosing a different source keeps existing mappings active. Choosing a different account from the same integration replaces that integration's mappings and keeps its recorded history. Choose accounts for one person only.
 
 Withings and Fitbit readings retain their source names in the stored records, summary sensor attributes, and panel data. Existing manual mappings keep their generic entity provenance. Capture starts with the sensor's current state and continues on future updates; this does not import the vendor's past history. A source that becomes unavailable later keeps its mapping and resumes when valid readings return.
+
+**Capture Hevy workouts.** Install Hevy Tracker in Home Assistant, then choose its account under **Workout source**. Workout capture is separate from metric priorities. Health Assistant reads the integration's public latest-workout summary and checks for changes every minute and when that sensor updates. It uses the reported start time and rounded duration, keeps exercise names and optional notes, and converts set weights and distances to kilograms and meters. No API key or private coordinator data is read.
+
+Capture starts with the completed workout currently exposed by Hevy Tracker. Subsequent workouts accumulate locally; there is no history import or live-session capture. Repeated syncs, restarts, entity renames, and changes to display units do not create another copy. When a public workout ID is present, it identifies the record. Today's summary has no ID, so identity uses the account, title, and workout times. Changing that title or those times can create another record; the summary does not provide enough information to reliably match such edits.
+
+An unavailable or invalid summary marks only the Hevy source as degraded and retries on later updates. Disabling automatic workout capture keeps recorded workouts and leaves manual workout entry available. There is no body-measurement export, even if an installed version registers a similarly named service.
+
+Exercise detail is limited to 100 exercises, 100 sets per exercise, 1,000 sets overall, 1,000 characters per note, and 256 KiB of stored detail. Durations must be finite, nonnegative, and no longer than seven days. Invalid dates, numbers, units, or payloads are rejected instead of partially importing a workout. These checks apply to the exposed summary; they cannot recover detail the source has rounded or omitted.
 
 **Map sensors manually.** Use this for templates, unknown integrations, or metrics without an automatic map. Select **Also edit manual entity mappings** in the source chooser. If no known sources are installed, Configure opens the manual form directly. Map sensors to weight, body fat percentage, lean mass, steps, distance, or active energy. State changes are converted from the sensor's unit, or your configured unit system when a manual sensor has no unit. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
 
