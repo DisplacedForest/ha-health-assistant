@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "regions": {
+    "shoulders": "Shoulders",
+    "chest": "Chest",
+    "back": "Back",
+    "biceps": "Biceps",
+    "triceps": "Triceps",
+    "forearms": "Forearms",
+    "core": "Core",
+    "glutes": "Glutes",
+    "quads": "Quads",
+    "hamstrings": "Hamstrings",
+    "calves": "Calves"
+  },
+  "exercises": [
+    {"aliases": ["Bench Press (Barbell)", "Barbell Bench Press", "Bench Press (Dumbbell)", "Dumbbell Bench Press"], "regions": ["chest", "triceps", "shoulders"], "reference": "https://www.hevyapp.com/exercises/how-to-bench-press-barbell/"},
+    {"aliases": ["Incline Bench Press (Barbell)", "Incline Bench Press (Dumbbell)"], "regions": ["chest", "triceps", "shoulders"], "reference": "https://www.hevyapp.com/exercises/how-to-bench-press-barbell/"},
+    {"aliases": ["Squat (Barbell)", "Barbell Squat", "Back Squat"], "regions": ["quads", "glutes"], "reference": "https://www.hevyapp.com/push-pull-legs-ultimate-guide/"},
+    {"aliases": ["Front Squat", "Front Squat (Barbell)"], "regions": ["quads", "glutes"], "reference": "https://www.hevyapp.com/exercises/how-to-front-squat/"},
+    {"aliases": ["Sumo Squat (Barbell)", "Barbell Sumo Squat"], "regions": ["quads", "glutes", "hamstrings"], "reference": "https://www.hevyapp.com/exercises/sumo-squat-barbell/"},
+    {"aliases": ["Romanian Deadlift (Barbell)", "Romanian Deadlift (Dumbbell)", "Romanian Deadlift"], "regions": ["hamstrings", "glutes"], "reference": "https://www.hevyapp.com/best-lower-body-pull-exercises/"},
+    {"aliases": ["Single Leg Romanian Deadlift (Dumbbell)"], "regions": ["hamstrings", "glutes"], "reference": "https://www.hevyapp.com/exercises/how-to-single-leg-romanian-deadlift-dumbbell/"},
+    {"aliases": ["Deadlift (Barbell)", "Barbell Deadlift", "Deadlift"], "regions": ["hamstrings", "glutes", "back"], "reference": "https://www.hevyapp.com/best-lower-body-pull-exercises/"},
+    {"aliases": ["Lat Pulldown (Machine)", "Lat Pulldown (Cable)", "Lat Pulldown"], "regions": ["back", "biceps"], "reference": "https://www.hevyapp.com/exercises/how-to-lat-pulldown-machine/"},
+    {"aliases": ["Single Arm Lat Pulldown", "Single Arm Lat Pulldown (Cable)"], "regions": ["back", "biceps"], "reference": "https://www.hevyapp.com/exercises/how-to-single-arm-lat-pulldown/"},
+    {"aliases": ["Pendlay Row", "Pendlay Row (Barbell)"], "regions": ["back"], "reference": "https://www.hevyapp.com/exercises/pendlay-row/"},
+    {"aliases": ["Bicep Curl (Barbell)", "Barbell Curl", "Barbell Bicep Curl"], "regions": ["biceps", "forearms"], "reference": "https://www.hevyapp.com/exercises/how-to-bicep-curl-barbell/"},
+    {"aliases": ["Bicep Curl (Dumbbell)", "Dumbbell Curl", "Dumbbell Bicep Curl"], "regions": ["biceps", "forearms"], "reference": "https://www.hevyapp.com/exercises/how-to-bicep-curl-dumbbell/"},
+    {"aliases": ["Lateral Raise (Dumbbell)", "Dumbbell Lateral Raise"], "regions": ["shoulders"], "reference": "https://www.hevyapp.com/exercises/how-to-lateral-raise-dumbbell/"},
+    {"aliases": ["Triceps Rope Pushdown", "Triceps Pushdown (Cable)", "Triceps Pushdown"], "regions": ["triceps"], "reference": "https://www.hevyapp.com/exercises/how-to-triceps-rope-pushdown/"},
+    {"aliases": ["Seated Calf Raise", "Seated Calf Raise (Machine)", "Seated Calf Raises"], "regions": ["calves"], "reference": "https://www.hevyapp.com/exercises/seated-calf-raises/"},
+    {"aliases": ["Standing Calf Raise", "Standing Calf Raise (Dumbbell)", "Single Leg Standing Calf Raise (Dumbbell)"], "regions": ["calves"], "reference": "https://www.hevyapp.com/exercises/how-to-single-leg-standing-calf-raise-dumbbell/"},
+    {"aliases": ["Plank", "Spiderman Plank", "V Up", "V Ups"], "regions": ["core"], "reference": "https://www.hevyapp.com/exercises/how-to-v-up/"}
+  ]
+}

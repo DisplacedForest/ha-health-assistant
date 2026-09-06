@@ -1,9 +1,61 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from homeassistant.util import dt as dt_util
+
 from custom_components.health_assistant.const import DOMAIN
-from custom_components.health_assistant.store import HealthObservation, MetricType
+from custom_components.health_assistant.store import (
+    HealthObservation,
+    MetricType,
+    Workout,
+)
 
 OBSERVED = datetime(2026, 8, 20, 7, 30, tzinfo=UTC)
+
+
+async def test_body_and_workout_detail(hass, hass_ws_client, config_entry):
+    await setup_integration(hass, config_entry)
+    now = dt_util.utcnow() - timedelta(minutes=1)
+    saved = await hass.async_add_executor_job(
+        config_entry.runtime_data.repository.upsert_workout,
+        Workout(
+            person_id="primary",
+            provider="fixture",
+            external_id="recorded-workout",
+            workout_type="strength",
+            started_at=now - timedelta(hours=1),
+            ended_at=now,
+            ingested_at=now,
+            provenance={
+                "private_payload": "not exposed",
+                "exercises": [{"name": "Bench Press (Barbell)", "sets": [{"reps": 8}]}],
+            },
+        ),
+    )
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/body"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["workout_count"] == 1
+    assert msg["result"]["workouts"][0]["id"] == saved.id
+    assert "private_payload" not in str(msg)
+    await client.send_json(
+        {"id": 2, "type": f"{DOMAIN}/workout_detail", "workout_id": saved.id}
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["exercises"][0]["recorded_sets"] == 1
+    assert "private_payload" not in str(msg)
+    await client.send_json(
+        {"id": 3, "type": f"{DOMAIN}/workout_detail", "workout_id": -1}
+    )
+    assert not (await client.receive_json())["success"]
+    await client.send_json(
+        {"id": 4, "type": f"{DOMAIN}/workout_detail", "workout_id": 999999}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_found"
 
 
 async def setup_integration(hass, config_entry):
@@ -361,3 +413,51 @@ async def test_read_only_user_cannot_change_observation_exclusion(
     response = await client.receive_json()
     assert response["success"] is False
     assert response["error"]["code"] == "unauthorized"
+
+
+@pytest.mark.parametrize("field", ["name", "notes", "type", "valid"])
+async def test_invalid_unicode_detail_stays_serializable(
+    hass, hass_ws_client, config_entry, field
+):
+    config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    now = datetime.now(UTC) - timedelta(minutes=1)
+    item = {"name": "Bench Press (Barbell)", "sets": [{"reps": 8}]}
+    if field == "type":
+        item["sets"][0]["type"] = "\ud800"
+    elif field != "valid":
+        item[field] = "\ud800"
+    valid = {
+        "name": "スクワット 🏋️",
+        "notes": "café, 今日",
+        "sets": [{"type": "通常", "reps": 5}],
+    }
+    saved = await hass.async_add_executor_job(
+        config_entry.runtime_data.repository.upsert_workout,
+        Workout(
+            person_id="primary",
+            provider="legacy",
+            external_id=field,
+            workout_type="strength",
+            started_at=now - timedelta(hours=1),
+            ended_at=now,
+            ingested_at=now,
+            provenance={"exercises": [item, valid]},
+        ),
+    )
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/body"})
+    body = await client.receive_json()
+    await client.send_json(
+        {"id": 2, "type": f"{DOMAIN}/workout_detail", "workout_id": saved.id}
+    )
+    detail = await client.receive_json()
+    assert body["success"], body
+    assert detail["success"], detail
+    assert detail["result"]["incomplete"] is (field != "valid")
+    assert detail["result"]["exercises"][-1]["name"] == valid["name"]
+    assert detail["result"]["exercises"][-1]["notes"] == valid["notes"]
+    assert detail["result"]["exercises"][-1]["sets"][0]["type"] == "通常"
+    assert body["result"]["workout_count"] == 1
+    assert body["result"]["incomplete_workouts"] == int(field != "valid")

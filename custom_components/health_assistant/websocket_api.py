@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
+from .body import build_body, workout_detail
 from .const import DOMAIN
 from .coordinator import HealthSummary
 from .overview import build_overview, reading_payload
@@ -313,3 +314,37 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_observation_exclusion)
     websocket_api.async_register_command(hass, ws_overview)
     websocket_api.async_register_command(hass, ws_observation_detail)
+    websocket_api.async_register_command(hass, ws_body)
+    websocket_api.async_register_command(hass, ws_workout_detail)
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/body"})
+@websocket_api.async_response
+async def ws_body(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+    result = await hass.async_add_executor_job(build_body, entry.runtime_data.database)
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/workout_detail",
+        vol.Required("workout_id"): _positive_id,
+    }
+)
+@websocket_api.async_response
+async def ws_workout_detail(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+    result = await hass.async_add_executor_job(
+        workout_detail, entry.runtime_data.database, msg["workout_id"]
+    )
+    if result is None:
+        connection.send_error(msg["id"], "not_found", "Workout is no longer available")
+        return
+    connection.send_result(msg["id"], result)

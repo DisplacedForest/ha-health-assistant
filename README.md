@@ -172,6 +172,7 @@ data:
 Configuring Health Assistant adds a Health entry to the sidebar, no manual resource registration needed. The panel is a real application view over the canonical store, served entirely from your instance and fully functional offline:
 
 - **Overview**: leads with a change in your record, then keeps quieter metrics in compact rows. Each reading has a recent trend, its source and observation time. Metrics without data stay collapsed. The workout strip covers the last seven days.
+- **Body (experimental)**: a fixed front and back figure shows recent recorded sets by muscle region. Open a region for its workouts, or a body measurement for the same readings and source detail as Overview.
 - **Trends**: weight, body fat, lean mass, steps, distance, and active energy over 7, 30, or 90 days, drawn as lightweight SVG charts.
 - Values display in your configured unit system; empty states point you at entity mapping and the manual actions.
 - Manual entry times use your browser's local timezone and are sent with an explicit offset-equivalent UTC timestamp.
@@ -190,6 +191,16 @@ Comparisons have deliberately narrow meanings:
 Source conflicts and source changes come first among fresh readings. Other fresh changes sort ahead of quiet metrics when they reach 0.5 kg for weight or lean mass, 0.5 percentage points for body fat, 1,000 steps, 1 km, or 100 kcal. Larger changes relative to those thresholds come first; ties and quiet metrics use a stable metric order. Stale readings follow fresh ones. These thresholds organize the display and say nothing about medical significance.
 
 The Overview carries at most 120 chart points per metric, eight recent workouts and 32 source statuses. Reading detail carries at most 50 claims and 25 nearby readings; history loads in pages of 20. Arbitrary provider metadata is not copied into the panel payload.
+
+### Experimental Body view
+
+![Body view with synthetic training data](docs/images/body-dark-tablet.png)
+
+Body is opt-in. Overview opens first on a new browser, and your explicit view choice is remembered locally for your Home Assistant user. The figure has fixed proportions; it doesn't reshape itself from your measurements.
+
+Color comes from usable non-warmup sets recorded in the last seven days. Each set fades with age, and the most active region gets the strongest shade. These are recorded-set counts, not recovery estimates. Workout detail shows reps, weights and source identity. Sleep and heart regions are marked "Not available yet."
+
+Exercise names use a small curated map. Unknown names are listed, and workouts without usable sets remain visible. Sources that only provide a workout summary won't produce muscle color. Body shows up to 100 workouts and marks incomplete or oversized detail. See [Body view](docs/body-view.md) for the exact calculation, data limits and how to add exercise aliases.
 
 ## Entities
 
