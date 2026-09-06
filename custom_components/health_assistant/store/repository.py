@@ -90,6 +90,18 @@ class HealthRepository:
             return self._upsert_observation(observation)
 
     def _upsert_observation(self, observation: HealthObservation) -> HealthObservation:
+        claim = self._upsert_claim(observation)
+        self._reconcile_around(claim)
+        linked = self._db.execute(
+            "SELECT observation_id FROM source_claims WHERE id = ?", (claim.id,)
+        )
+        result = self._db.execute(
+            _OBSERVATION_SELECT + " WHERE o.id = ?",
+            (linked[0]["observation_id"],),
+        )
+        return self._observation_from_row(result[0])
+
+    def _upsert_claim(self, observation: HealthObservation) -> SourceClaim:
         metric = _require_metric(observation.metric)
         canonical = CANONICAL_UNITS[metric]
         if observation.unit != canonical:
@@ -128,16 +140,7 @@ class HealthRepository:
                 RecordStatus(observation.status).value,
             ),
         )
-        claim = self._claim_from_row(rows[0])
-        self._reconcile_around(claim)
-        linked = self._db.execute(
-            "SELECT observation_id FROM source_claims WHERE id = ?", (claim.id,)
-        )
-        result = self._db.execute(
-            _OBSERVATION_SELECT + " WHERE o.id = ?",
-            (linked[0]["observation_id"],),
-        )
-        return self._observation_from_row(result[0])
+        return self._claim_from_row(rows[0])
 
     def get_claims(self, observation_id: int) -> list[SourceClaim]:
         rows = self._db.execute(

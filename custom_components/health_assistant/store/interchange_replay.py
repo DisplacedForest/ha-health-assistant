@@ -64,52 +64,69 @@ def _count(counts, domain, action):
 def replay_archive(staging, target, after_batch=None):
     repository = HealthRepository(target)
     counts = {}
-    for metric in MetricType:
-        desired = [
-            row["provider"]
-            for row in staging.execute(
-                "SELECT provider FROM metric_priorities WHERE metric=? ORDER BY rank",
-                (metric.value,),
-            )
-        ]
-        if desired != repository.get_priority(metric):
-            repository.set_priority(metric, desired, streaming=True)
-            _count(counts, "metric_priorities", "merge")
-        else:
-            _count(counts, "metric_priorities", "unchanged")
+    with target.transaction():
+        changed = False
+        for batch in _batches(rows_by_id(staging, "source_claims")):
+            for incoming in batch:
+                rows = target.execute(
+                    "SELECT * FROM source_claims WHERE provider=? AND external_id=? AND metric=? AND observed_at=?",
+                    (
+                        incoming["provider"],
+                        incoming["external_id"],
+                        incoming["metric"],
+                        incoming["observed_at"],
+                    ),
+                )
+                existing = dict(rows[0]) if rows else None
+                record = _merge_record(existing, incoming) if existing else incoming
+                if existing and _same(existing, record, {"id", "observation_id"}):
+                    _count(counts, "source_claims", "unchanged")
+                    continue
+                repository._upsert_claim(_claim_model(record))
+                changed = True
+                _count(counts, "source_claims", "merge" if existing else "create")
+        for metric in MetricType:
+            desired = [
+                row["provider"]
+                for row in staging.execute(
+                    "SELECT provider FROM metric_priorities WHERE metric=? ORDER BY rank",
+                    (metric.value,),
+                )
+            ]
+            if desired != repository.get_priority(metric):
+                repository.set_priority(metric, desired, streaming=True)
+                _count(counts, "metric_priorities", "merge")
+            else:
+                _count(counts, "metric_priorities", "unchanged")
+        if changed:
+            after = ("", "")
+            while pairs := target.execute(
+                "SELECT DISTINCT person_id,metric FROM source_claims WHERE (person_id,metric)>(?,?) ORDER BY person_id,metric LIMIT ?",
+                (*after, PAGE_SIZE),
+            ):
+                for pair in pairs:
+                    repository.reconcile_metric(
+                        pair["person_id"], MetricType(pair["metric"]), streaming=True
+                    )
+                after = (pairs[-1]["person_id"], pairs[-1]["metric"])
     if after_batch:
-        after_batch("metric_priorities")
-    for domain in ("source_claims", "workouts"):
-        for batch in _batches(rows_by_id(staging, domain)):
-            with target.transaction():
-                for incoming in batch:
-                    if domain == "source_claims":
-                        rows = target.execute(
-                            "SELECT * FROM source_claims WHERE provider=? AND external_id=? AND metric=? AND observed_at=?",
-                            (
-                                incoming["provider"],
-                                incoming["external_id"],
-                                incoming["metric"],
-                                incoming["observed_at"],
-                            ),
-                        )
-                    else:
-                        rows = target.execute(
-                            "SELECT * FROM workouts WHERE provider=? AND external_id=?",
-                            (incoming["provider"], incoming["external_id"]),
-                        )
-                    existing = dict(rows[0]) if rows else None
-                    record = _merge_record(existing, incoming) if existing else incoming
-                    if existing and _same(existing, record, {"id", "observation_id"}):
-                        _count(counts, domain, "unchanged")
-                        continue
-                    if domain == "source_claims":
-                        repository.upsert_observation(_claim_model(record))
-                    else:
-                        repository.upsert_workout(_workout_model(record))
-                    _count(counts, domain, "merge" if existing else "create")
-            if after_batch:
-                after_batch(domain)
+        after_batch("source_claims")
+    for batch in _batches(rows_by_id(staging, "workouts")):
+        with target.transaction():
+            for incoming in batch:
+                rows = target.execute(
+                    "SELECT * FROM workouts WHERE provider=? AND external_id=?",
+                    (incoming["provider"], incoming["external_id"]),
+                )
+                existing = dict(rows[0]) if rows else None
+                record = _merge_record(existing, incoming) if existing else incoming
+                if existing and _same(existing, record, {"id"}):
+                    _count(counts, "workouts", "unchanged")
+                    continue
+                repository.upsert_workout(_workout_model(record))
+                _count(counts, "workouts", "merge" if existing else "create")
+        if after_batch:
+            after_batch("workouts")
     stream_ids = _replay_streams(staging, target, counts)
     if after_batch:
         after_batch("environment_streams")
