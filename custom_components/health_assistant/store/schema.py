@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -174,6 +174,55 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             CREATE INDEX idx_observations_person_status_id
             ON observations (person_id, status, id)
             """,
+        ),
+    ),
+    (
+        6,
+        (
+            """
+            CREATE TABLE environment_streams (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL UNIQUE,
+                mapping_id TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                area_id TEXT NOT NULL,
+                area_name TEXT NOT NULL,
+                unit TEXT NOT NULL
+            )
+            """,
+            "CREATE INDEX idx_environment_area_metric ON environment_streams(area_id, metric)",
+            "CREATE INDEX idx_environment_mapping ON environment_streams(mapping_id, id)",
+            """
+            CREATE TABLE environment_buckets (
+                stream_id INTEGER NOT NULL REFERENCES environment_streams(id),
+                start_ms INTEGER NOT NULL,
+                resolution_s INTEGER NOT NULL,
+                sample_count INTEGER NOT NULL,
+                sample_sum REAL NOT NULL,
+                minimum REAL,
+                maximum REAL,
+                weighted_sum REAL NOT NULL,
+                covered_ms INTEGER NOT NULL,
+                first_report_ms INTEGER,
+                last_report_ms INTEGER,
+                updated_ms INTEGER NOT NULL,
+                PRIMARY KEY(stream_id, resolution_s, start_ms)
+            ) WITHOUT ROWID
+            """,
+            "CREATE INDEX idx_environment_retention ON environment_buckets(resolution_s, start_ms)",
+            """
+            CREATE TABLE environment_maintenance (
+                id INTEGER PRIMARY KEY CHECK(id=1),
+                last_success_ms INTEGER,
+                duration_ms INTEGER,
+                rolled_up INTEGER NOT NULL DEFAULT 0,
+                deleted INTEGER NOT NULL DEFAULT 0,
+                failed INTEGER NOT NULL DEFAULT 0
+            )
+            """,
+            "INSERT INTO environment_maintenance(id) VALUES (1)",
         ),
     ),
 )

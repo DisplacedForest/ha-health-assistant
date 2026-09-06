@@ -54,7 +54,8 @@
           "lean_mass": "Lean mass sensors",
           "steps": "Step count sensors",
           "distance": "Distance sensors",
-          "active_energy": "Active energy sensors"
+          "active_energy": "Active energy sensors",
+          "environmental_capture": "Configure environmental capture"
         }
       },
       "sources": {
@@ -68,7 +69,8 @@
           "distance": "Distance source",
           "active_energy": "Active energy source",
           "confirm_person": "These new accounts belong to the person in this health history",
-          "manual_mapping": "Also edit manual entity mappings"
+          "manual_mapping": "Also edit manual entity mappings",
+          "environmental_capture": "Configure environmental capture"
         }
       },
       "manual": {
@@ -80,7 +82,19 @@
           "lean_mass": "Lean mass sensors",
           "steps": "Step count sensors",
           "distance": "Distance sensors",
-          "active_energy": "Active energy sensors"
+          "active_energy": "Active energy sensors",
+          "environmental_capture": "Configure environmental capture"
+        }
+      },
+      "environment": {
+        "title": "Environmental capture",
+        "description": "Keep room temperature, humidity and CO2 history from existing sensors. {mapping_count} of 12 mappings are in use. Leave area empty to follow the sensor or device area. To move or change a mapping, stop it here and add it again. Old history stays in its original area. Five-minute records are kept for 90 days, then hourly records for two years. Capture starts with a fresh sensor report. A crash can lose the open five-minute record. This records the sensor's room, not who was there.",
+        "data": {
+          "action": "Action",
+          "entity_id": "Sensor",
+          "metric": "Measurement",
+          "area_id": "Area override",
+          "mapping": "Mapping to stop"
         }
       }
     },
@@ -91,7 +105,8 @@
     "error": {
       "source_unavailable": "This source is no longer ready for this metric. Check its status below.",
       "different_profiles": "Choose one account per integration for this health history.",
-      "confirm_person": "Confirm that the new accounts belong to the person in this health history."
+      "confirm_person": "Confirm that the new accounts belong to the person in this health history.",
+      "environment_invalid": "Check the sensor, its unit and area. Choose a supported reading, avoid duplicate mappings, and stay within 12 active mappings and 256 stored stream revisions."
     }
   },
   "services": {

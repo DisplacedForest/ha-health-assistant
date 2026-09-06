@@ -28,6 +28,7 @@ from .const import (
     PROVIDER_HA_ENTITY,
     PROVIDER_MANUAL,
 )
+from .environment_options import EnvironmentalOptions
 from .paths import database_path
 from .providers.manual import ManualProvider
 from .sources import SOURCE_NAMES, SourceOffer, discover_sources
@@ -45,6 +46,7 @@ def _options_schema(options: dict[str, Any]) -> vol.Schema:
             ): EntitySelector(EntitySelectorConfig(domain="sensor", multiple=True))
             for metric in MetricType
         }
+        | {vol.Optional("environmental_capture", default=False): BooleanSelector()}
     )
 
 
@@ -162,6 +164,9 @@ class SourceFlow:
                 selected[metric] = offer.key
                 selections[metric] = offer.choice
             if not errors:
+                self._environment_requested = isinstance(
+                    self, OptionsFlow
+                ) and user_input.get("environmental_capture", False)
                 if bindings != self._options().get(CONF_SOURCE_MAPPINGS, {}):
                     self._options()[CONF_SOURCE_MAPPINGS] = bindings
                     self._changed_options.add(CONF_SOURCE_MAPPINGS)
@@ -203,6 +208,10 @@ class SourceFlow:
             fields[vol.Optional(metric.value, default=default)] = SelectSelector(
                 SelectSelectorConfig(options=choices, mode="dropdown")
             )
+        if isinstance(self, OptionsFlow):
+            fields[vol.Optional("environmental_capture", default=False)] = (
+                BooleanSelector()
+            )
         fields[vol.Optional("confirm_person", default=False)] = BooleanSelector()
         fields[vol.Optional("manual_mapping", default=False)] = BooleanSelector()
         details = []
@@ -231,12 +240,19 @@ class SourceFlow:
                 step_id="manual", data_schema=_options_schema(self._options())
             )
         self._options()[CONF_MAPPINGS] = {
-            metric: entities for metric, entities in user_input.items() if entities
+            metric: entities
+            for metric, entities in user_input.items()
+            if entities and metric in {m.value for m in MetricType}
         }
         self._changed_options.add(CONF_MAPPINGS)
+        self._environment_requested = isinstance(self, OptionsFlow) and user_input.get(
+            "environmental_capture", False
+        )
         return await self._finish()
 
     async def _finish(self) -> ConfigFlowResult:
+        if getattr(self, "_environment_requested", False):
+            return await self.async_step_environment()
         if self._selections:
             offers = {offer.choice: offer for offer in self._offers()}
             for metric, choice in self._selections.items():
@@ -293,7 +309,7 @@ class HealthAssistantConfigFlow(SourceFlow, ConfigFlow, domain=DOMAIN):
         return HealthAssistantOptionsFlow()
 
 
-class HealthAssistantOptionsFlow(SourceFlow, OptionsFlow):
+class HealthAssistantOptionsFlow(EnvironmentalOptions, SourceFlow, OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:

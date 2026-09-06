@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- You can keep room temperature, humidity and CO2 history from existing sensors. Capture is optional, stays local, and records gaps when fresh reports are missing. Five-minute history is kept for 90 days, then hourly history for two years.
+
 - Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
 
 - Incorrect readings can be excluded from current values and charts, then restored. Their source history is kept, and replaying the same records does not reactivate them. The database moves to schema 5; older builds cannot open it.
@@ -24,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Source reconciliation: every incoming record is kept as a source claim, and cross-provider reports of the same physical measurement merge into one canonical observation carrying both provenances. Ambiguous near-matches are flagged as possible duplicates instead of being merged silently, a preferred source can be recorded per metric, and reconciliation is replayable with no claim ever deleted. The database migrates to schema version 3.
 
 ### Changed
+
+- Home Assistant 2026.8.0 or later is now required. Environmental history adds schema 6. Back up before upgrading; returning to an older integration build requires its matching database backup.
 
 - Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.
 
