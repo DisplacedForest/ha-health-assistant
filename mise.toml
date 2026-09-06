@@ -18,6 +18,9 @@ run = "npm --prefix frontend-src run lint"
 depends = ["frontend-install"]
 run = "npm --prefix frontend-src run build"
 
+[tasks.frontend-test]
+run = "npm --prefix frontend-src test"
+
 [tasks.frontend-verify]
 depends = ["frontend-build"]
 run = [
@@ -26,7 +29,7 @@ run = [
 ]
 
 [tasks.check]
-depends = ["fmt", "lint", "test", "frontend-lint", "frontend-verify"]
+depends = ["fmt", "lint", "test", "frontend-lint", "frontend-test", "frontend-verify"]
 
 [tasks.ci]
 depends = ["check"]

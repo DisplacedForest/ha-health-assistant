@@ -5,7 +5,7 @@
 [![Stars](https://img.shields.io/github/stars/DisplacedForest/ha-health-assistant?style=for-the-badge)](https://github.com/DisplacedForest/ha-health-assistant/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/DisplacedForest/ha-health-assistant?style=for-the-badge)](https://github.com/DisplacedForest/ha-health-assistant/commits/main)
 [![License](https://img.shields.io/github/license/DisplacedForest/ha-health-assistant?style=for-the-badge)](LICENSE)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.8+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
 A local-first personal health platform for Home Assistant.
@@ -33,7 +33,9 @@ An excluded reading stays in your local history and keeps its source information
 
 Exclusion follows the source records behind a measurement. Replaying those records or changing source priority does not bring the reading back. A new source report that merges into the same measurement inherits its exclusion. A distinct reading remains visible. Matching still depends on the source identity, timestamp and metric's reconciliation rules; a source that presents a bad reading as a different measurement may need another exclusion.
 
-The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` provide this behavior. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. Changes require a Home Assistant administrator. The command accepts `observation_id` and an `excluded` boolean. Full value editing and permanent erasure are not available in this release.
+Open a metric in the Health panel, choose a reading, and select **Exclude reading**. To bring one back, turn on **Excluded only**, open the reading, and select **Restore reading**. These controls require a Home Assistant administrator. Full value editing and permanent erasure are not available in this release.
+
+The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` expose the same behavior for tools. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. The change command accepts `observation_id` and an `excluded` boolean.
 
 ## Privacy
 
@@ -89,6 +91,24 @@ Core concepts:
 - **0.4.0 Trends & Context**: longitudinal charts, environmental correlations, comparisons, health timeline.
 - **0.5.0 Automation & Platform**: health events, richer automation primitives, provider capability contracts.
 - **1.0.0**: stable local health platform with polished frontend and stable provider contracts.
+
+## Environmental history
+
+Requires Home Assistant 2026.8.0 or later. Upgrade Home Assistant before installing this build. The integration refuses setup on older versions.
+
+Open Settings, Devices & services, Health Assistant, Configure and select **Configure environmental capture**. Add an existing temperature, relative humidity or CO2 sensor. You can capture up to 12 measurements at once. Temperature accepts °C, °F or K and is stored in °C; humidity uses percent and CO2 uses ppm. Noise and air-quality index sensors are not supported yet.
+
+The area comes from the entity, then its device, unless you choose an override. A sensor needs an area before capture starts. Changing areas starts a new history segment and keeps earlier records in their original room. To change a mapping, stop it and add it again. Stopping capture keeps its history. A room assignment does not establish who was there or where someone slept.
+
+History starts with the next fresh sensor report. Five-minute records store the average weighted by covered time, extrema and sample counts. A repeated report of the same value extends coverage. Reading an old HA state does not. A value is held for at most 15 minutes after a report; unavailable sensors, restarts and longer gaps leave missing coverage. This describes what HA reported, not a guarantee that a physical sensor was working. There are no environmental charts or health correlations in this release.
+
+Five-minute records are kept for 90 days, then combined into hourly records until they reach two years old. Older records are removed. Hourly history retains the total covered time but loses the exact timing of gaps within the hour. Maintenance runs after startup and daily. Diagnostics show its last success, record counts and sanitized failure status. A failed database write pauses capture while pending records are retried; that interval stays uncovered. An orderly unload saves the partial record. A crash can lose the open five-minute record.
+
+Twelve continuously recorded streams budget about 79.31 MB after two years, plus fixed database overhead and maintenance delay. Area changes create additional stream revisions, so the number of active sensors alone does not describe storage use. The registry holds at most 256 active or historical streams; setup reports an error at that limit. SQLite reuses deleted pages, so the file may keep its previous size. Backups need additional space.
+
+Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups include the complete environmental history, coverage, area metadata and maintenance state. Restore the database as a whole using the procedure below. Portable interchange must include these tables and their metadata; exporting only scalar observations is not a complete history backup.
+
+This build moves the database to schema 6. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
 
 ## Getting data in
 
@@ -147,13 +167,29 @@ data:
 
 ## The Health panel
 
+![Health Overview with synthetic readings, dark tablet layout](docs/images/overview-dark-tablet.png)
+
 Configuring Health Assistant adds a Health entry to the sidebar, no manual resource registration needed. The panel is a real application view over the canonical store, served entirely from your instance and fully functional offline:
 
-- **Overview**: latest body metrics, today's activity, and the most recent workout, each with a source line showing exactly which provider and sensor produced the value.
+- **Overview**: leads with a change in your record, then keeps quieter metrics in compact rows. Each reading has a recent trend, its source and observation time. Metrics without data stay collapsed. The workout strip covers the last seven days.
 - **Trends**: weight, body fat, lean mass, steps, distance, and active energy over 7, 30, or 90 days, drawn as lightweight SVG charts.
 - Values display in your configured unit system; empty states point you at entity mapping and the manual actions.
+- Manual entry times use your browser's local timezone and are sent with an explicit offset-equivalent UTC timestamp.
 
 Data reaches the panel through a dedicated WebSocket API with bounded queries and server-side downsampling. The frontend never touches the database, and the backend never renders.
+
+Select a metric to inspect its readings. The detail view shows the claim supplying the selected record, the other retained claims, and nearby readings that may explain a disagreement. It also provides exclusion and restoration controls. The Sources disclosure shows current source health and the last successful operation, which is separate from the age of a measurement. The view refreshes every minute while open, or immediately when you press Refresh.
+
+Comparisons have deliberately narrow meanings:
+
+- Weight, body fat and lean mass compare the latest reading with the closest reading to seven days earlier, within a five-to-nine-day window. Different sources or a source conflict suppress the delta.
+- Steps, distance and active energy compare yesterday's recorded maximum with the day before. These are recorded counter totals, not proof that a tracker covered the full day. Today's partial count is never compared with a completed day. Local calendar boundaries follow Home Assistant's timezone.
+- Missing comparison readings produce no delta. Chart lines break at source changes. Body fat differences are percentage points.
+- Body measurements older than 14 days and activity readings older than 36 hours are marked as older readings. These are display defaults, not recommendations about measurement frequency.
+
+Source conflicts and source changes come first among fresh readings. Other fresh changes sort ahead of quiet metrics when they reach 0.5 kg for weight or lean mass, 0.5 percentage points for body fat, 1,000 steps, 1 km, or 100 kcal. Larger changes relative to those thresholds come first; ties and quiet metrics use a stable metric order. Stale readings follow fresh ones. These thresholds organize the display and say nothing about medical significance.
+
+The Overview carries at most 120 chart points per metric, eight recent workouts and 32 source statuses. Reading detail carries at most 50 claims and 25 nearby readings; history loads in pages of 20. Arbitrary provider metadata is not copied into the panel payload.
 
 ## Entities
 

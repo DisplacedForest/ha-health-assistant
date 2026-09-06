@@ -57,10 +57,11 @@ The Health panel's source lives in `frontend-src/` (Lit, bundled by esbuild). Th
 ```bash
 mise run frontend-build     # bundles frontend-src into the committed dist
 mise run frontend-lint      # eslint over the panel source
+mise run frontend-test      # panel interaction regression tests
 mise run frontend-verify    # rebuilds, then fails if the committed dist is stale or untracked
 ```
 
-Lint and verify run as part of `mise run check` and in CI, so a panel change pushed without a rebuilt, committed bundle fails the Frontend job. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
+Lint, interaction tests, and bundle verification run as part of `mise run check` and in CI. A panel change pushed without a rebuilt, committed bundle fails the Frontend job. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
 
 ## Installing the dev variant into a real instance
 
@@ -101,3 +102,9 @@ To add a provider, implement the contract and register it in the integration set
 ## Reporting bugs
 
 Use the bug report template and include your Home Assistant version, the integration version, and debug logs with anything sensitive removed.
+
+## Environmental capture
+
+The environmental accumulator and repository live in `store/environment.py`. They stay independent of Home Assistant. `environment.py` handles filtered state reports, timers and lifecycle; `environment_options.py` owns its options step. Writes and maintenance use the same `HealthDatabase` transaction boundary as health observations and backups.
+
+Environmental records use compact series tables, not scalar source claims. Tests cover report-based duration, gaps, partial flushes, immutable area revisions, retention, indexed queries, bounded registration and backup restore. A production storage fixture verifies the 160-byte retained-bucket and 4 KiB registered-stream budgets. Test report behavior on Home Assistant 2026.8.0 as well as the release host. Do not infer personal exposure from an area mapping or continuous sensor coverage from an unchanged state.
