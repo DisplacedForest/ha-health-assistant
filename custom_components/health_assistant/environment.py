@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
@@ -142,32 +142,35 @@ class EnvironmentalCapture:
     def _registry_changed(self, event) -> None:
         if self.stopping or self.reloading:
             return
-        try:
-            resolved = [resolve_mapping(self.hass, m) for m in self.mappings]
-            current = {
-                (
-                    s["source_id"],
-                    s["entity_id"],
-                    s["metric"],
-                    s["area_id"],
-                    s["area_name"],
-                )
-                for sources in self.sources.values()
-                for s in sources
-            }
-            updated = {
-                (
-                    s["source_id"],
-                    s["entity_id"],
-                    s["metric"],
-                    s["area_id"],
-                    s["area_name"],
-                )
-                for s in resolved
-            }
-            changed = current != updated
-        except StoreValidationError:
-            changed = not self.mapping_failed
+        resolved = []
+        mapping_failed = False
+        for mapping in self.mappings:
+            try:
+                resolved.append(resolve_mapping(self.hass, mapping))
+            except StoreValidationError:
+                mapping_failed = True
+        current = {
+            (
+                s["source_id"],
+                s["entity_id"],
+                s["metric"],
+                s["area_id"],
+                s["area_name"],
+            )
+            for sources in self.sources.values()
+            for s in sources
+        }
+        updated = {
+            (
+                s["source_id"],
+                s["entity_id"],
+                s["metric"],
+                s["area_id"],
+                s["area_name"],
+            )
+            for s in resolved
+        }
+        changed = current != updated or mapping_failed != self.mapping_failed
         if changed:
             self.reloading = True
             timestamp = int(event.time_fired.timestamp() * 1000)
@@ -182,11 +185,11 @@ class EnvironmentalCapture:
         if self.stopping or self.reloading or self.capture_failed:
             return
         state = event.data.get("new_state")
-        timestamp = (
-            int(state.last_reported.timestamp() * 1000)
-            if state
-            else int(event.time_fired.timestamp() * 1000)
+        reported = state.last_reported if state else event.time_fired
+        report_us = (reported - datetime(1970, 1, 1, tzinfo=UTC)) // timedelta(
+            microseconds=1
         )
+        timestamp = report_us // 1000
         for stream in self.sources.get(event.data["entity_id"], []):
             value = None
             if state and not state.attributes.get("restored"):
@@ -198,7 +201,11 @@ class EnvironmentalCapture:
                     )
                 except StoreValidationError:
                     pass
-            self._queue(self.accumulators[stream["id"]].report(timestamp, value))
+            self._queue(
+                self.accumulators[stream["id"]].report(
+                    timestamp, value, report_us=report_us
+                )
+            )
 
     @callback
     def _queue(self, buckets) -> None:

@@ -217,3 +217,83 @@ async def test_bad_mappings_do_not_prevent_health_setup(hass, config_entry):
     await hass.async_block_till_done()
     assert config_entry.runtime_data.environment.mapping_failed
     assert config_entry.runtime_data.environment.accumulators == {}
+
+
+async def test_submillisecond_reports_end_coverage(hass, config_entry, freezer):
+    entity_id = await setup_capture(hass, config_entry, freezer)
+    capture = config_entry.runtime_data.environment
+    for index, ending in enumerate(("unavailable", "invalid_unit", "removed")):
+        freezer.move_to(f"2026-09-06T12:{index:02d}:00.000100Z")
+        hass.states.async_set(entity_id, "21", {"unit_of_measurement": "°C"})
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(microseconds=200))
+        if ending == "removed":
+            hass.states.async_remove(entity_id)
+        elif ending == "invalid_unit":
+            hass.states.async_set(entity_id, "21", {"unit_of_measurement": "invalid"})
+        else:
+            hass.states.async_set(entity_id, ending)
+        await hass.async_block_till_done()
+        assert next(iter(capture.accumulators.values())).value is None
+    await advance(hass, freezer, 900)
+    rows = await hass.async_add_executor_job(capture.repository.export_buckets)
+    assert sum(row["sample_count"] for row in rows) == 3
+    assert sum(row["covered_ms"] for row in rows) == 0
+
+
+async def test_overlapping_report_events_count_once(hass, config_entry, freezer):
+    from homeassistant.const import EVENT_STATE_CHANGED
+
+    entity_id = await setup_capture(hass, config_entry, freezer)
+    freezer.tick(timedelta(microseconds=100))
+    hass.states.async_set(entity_id, "21", {"unit_of_measurement": "°C"})
+    await hass.async_block_till_done()
+    state = hass.states.get(entity_id)
+    hass.bus.async_fire(
+        EVENT_STATE_CHANGED,
+        {"entity_id": entity_id, "old_state": state, "new_state": state},
+    )
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(microseconds=200))
+    hass.states.async_set(entity_id, "21", {"unit_of_measurement": "°C"})
+    await hass.async_block_till_done()
+    capture = config_entry.runtime_data.environment
+    accumulator = next(iter(capture.accumulators.values()))
+    assert accumulator.bucket.sample_count == 2
+    assert accumulator.value == 21
+
+
+async def test_invalid_mapping_does_not_mask_area_change_or_recovery(
+    hass, config_entry, freezer
+):
+    entity_id = await setup_capture(hass, config_entry, freezer)
+    options = dict(config_entry.options)
+    recoverable = er.async_get(hass).async_get_or_create(
+        "sensor", "test", "recoverable", suggested_object_id="recoverable"
+    )
+    options[CONF_ENVIRONMENT] = [
+        *options[CONF_ENVIRONMENT],
+        {
+            "mapping_id": "recoverable",
+            "entity_id": recoverable.entity_id,
+            "entity_registry_id": recoverable.id,
+            "metric": "temperature",
+            "area_override": False,
+        },
+        {"entity_id": "sensor.gone"},
+    ]
+    hass.config_entries.async_update_entry(config_entry, options=options)
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.environment.mapping_failed
+    second = ar.async_get(hass).async_create("Office")
+    er.async_get(hass).async_update_entity(entity_id, area_id=second.id)
+    await hass.async_block_till_done()
+    capture = config_entry.runtime_data.environment
+    assert capture.sources[entity_id][0]["area_name"] == "Office"
+    assert capture.mapping_failed
+    er.async_get(hass).async_update_entity(recoverable.entity_id, area_id=second.id)
+    await hass.async_block_till_done()
+    capture = config_entry.runtime_data.environment
+    assert len(capture.accumulators) == 2
+    assert capture.sources[recoverable.entity_id][0]["area_name"] == "Office"
+    assert capture.mapping_failed

@@ -75,7 +75,7 @@ class EnvironmentAccumulator:
             stream_id, now_ms // WINDOW_MS * WINDOW_MS
         )
         self.position_ms = max(now_ms, self.bucket.updated_ms)
-        self.last_report_ms = self.position_ms - 1
+        self.last_report_us = self.position_ms * 1000 - 1
         self.value: float | None = None
         self.expires_ms = self.position_ms
 
@@ -103,11 +103,14 @@ class EnvironmentAccumulator:
                 self.bucket = EnvironmentBucket(self.stream_id, start)
         return closed
 
-    def report(self, now_ms: int, value: float | None) -> list[EnvironmentBucket]:
-        if now_ms <= self.last_report_ms or now_ms < self.position_ms:
+    def report(
+        self, now_ms: int, value: float | None, *, report_us: int | None = None
+    ) -> list[EnvironmentBucket]:
+        report_us = now_ms * 1000 if report_us is None else report_us
+        if report_us <= self.last_report_us or now_ms < self.position_ms:
             return []
         closed = self.advance(now_ms)
-        self.last_report_ms = now_ms
+        self.last_report_us = report_us
         self.value = value
         self.expires_ms = now_ms + HOLD_MS if value is not None else now_ms
         if value is not None:
