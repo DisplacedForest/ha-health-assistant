@@ -161,11 +161,15 @@ class HealthRepository:
         )
         return [row["provider"] for row in rows]
 
-    def set_priority(self, metric: MetricType, providers: list[str]) -> None:
+    def set_priority(
+        self, metric: MetricType, providers: list[str], *, streaming: bool = False
+    ) -> None:
         with self._db.transaction():
-            self._set_priority(metric, providers)
+            self._set_priority(metric, providers, streaming=streaming)
 
-    def _set_priority(self, metric: MetricType, providers: list[str]) -> None:
+    def _set_priority(
+        self, metric: MetricType, providers: list[str], *, streaming: bool = False
+    ) -> None:
         metric = _require_metric(metric)
         cleaned = [_require_text(provider, "provider") for provider in providers]
         if len(set(cleaned)) != len(cleaned):
@@ -192,7 +196,7 @@ class HealthRepository:
             (metric.value,),
         )
         for row in persons:
-            self.reconcile_metric(row["person_id"], metric)
+            self.reconcile_metric(row["person_id"], metric, streaming=streaming)
 
     def ensure_provider_ranked(self, metric: MetricType, provider: str) -> None:
         metric = _require_metric(metric)
@@ -211,9 +215,21 @@ class HealthRepository:
             ),
         )
 
-    def reconcile_metric(self, person_id: str, metric: MetricType) -> None:
+    def reconcile_metric(
+        self, person_id: str, metric: MetricType, *, streaming: bool = False
+    ) -> None:
         metric = _require_metric(metric)
         with self._db.transaction():
+            if streaming:
+                after = 0
+                while rows := self._db.execute(
+                    "SELECT * FROM source_claims WHERE person_id=? AND metric=? AND id>? ORDER BY id LIMIT 256",
+                    (person_id, metric.value, after),
+                ):
+                    for row in rows:
+                        self._reconcile_around(self._claim_from_row(row))
+                    after = rows[-1]["id"]
+                return
             claims = self._fetch_claims(person_id, metric)
             self._apply_reconciliation(person_id, metric, claims, None, None)
 

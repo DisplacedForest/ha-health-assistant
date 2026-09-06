@@ -112,3 +112,23 @@ add_workout:
     source:
       selector:
         text:
+
+export_history:
+  fields:
+    path:
+      required: true
+      example: health-exports/history.tar.gz
+      selector:
+        text:
+
+import_history:
+  fields:
+    path:
+      required: true
+      example: health-exports/history.tar.gz
+      selector:
+        text:
+    dry_run:
+      default: true
+      selector:
+        boolean:

@@ -237,6 +237,30 @@
     "create_backup": {
       "name": "Create backup",
       "description": "Writes a consistent timestamped copy of the local health database into the integration's backups folder."
+    },
+    "export_history": {
+      "name": "Export health history",
+      "description": "Saves a portable archive of health and environmental history. Requires an administrator and never overwrites an existing file.",
+      "fields": {
+        "path": {
+          "name": "Archive path",
+          "description": "A .tar.gz file under the Home Assistant config directory, such as health-exports/history.tar.gz."
+        }
+      }
+    },
+    "import_history": {
+      "name": "Import health history",
+      "description": "Validates a portable archive and previews the changes. Turn off dry run to merge the history and its source priorities. Requires an administrator.",
+      "fields": {
+        "path": {
+          "name": "Archive path",
+          "description": "An existing .tar.gz archive under the Home Assistant config directory."
+        },
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Preview record counts and changes without writing to the health database. Enabled by default."
+        }
+      }
     }
   },
   "issues": {
