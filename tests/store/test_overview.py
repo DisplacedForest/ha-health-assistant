@@ -93,3 +93,25 @@ def test_dense_points_are_bounded_and_keep_endpoints(database, repository):
     assert len(points) <= 120
     assert points[0]["v"] == 80
     assert points[-1]["v"] == 83.99
+
+
+def test_long_provider_identity_is_preserved_until_presentation(database, repository):
+    provider = "source-" + "a" * 122
+    seed(repository, 82, NOW - timedelta(days=7), provider=provider)
+    seed(repository, 80, NOW, provider=provider)
+    result = metric_result(database, repository)
+    assert result["state"] == "changed"
+    assert result["delta"] == -2
+    assert len(result["current"]["provider"]) == 120
+    assert not any(point["source_changed"] for point in result["points"])
+
+    seed(repository, 81, NOW - timedelta(days=3), provider=provider + "other")
+    result = metric_result(database, repository)
+    assert result["state"] == "source_changed"
+    assert result["delta"] is None
+    assert [point["source_changed"] for point in result["points"]] == [
+        False,
+        True,
+        True,
+    ]
+    assert len({point["provider"] for point in result["points"]}) == 1

@@ -15,7 +15,7 @@ function sparkline(metric, large = false) {
   const paths = [];
   let path = "";
   points.forEach((point, index) => {
-    if (index && point.provider !== points[index - 1].provider) {
+    if (index && point.source_changed) {
       paths.push(path);
       path = "";
     }

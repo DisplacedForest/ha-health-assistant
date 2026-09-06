@@ -19,7 +19,7 @@ THRESHOLDS = {
 }
 
 
-def reading_payload(row):
+def reading_payload(row, *, bounded=True):
     if row is None:
         return None
     return {
@@ -27,7 +27,7 @@ def reading_payload(row):
         "value": row.value,
         "unit": row.unit,
         "observed_at": row.observed_at.isoformat(),
-        "provider": row.provider[:120],
+        "provider": row.provider[:120] if bounded else row.provider,
         "possible_duplicate": row.possible_duplicate,
         "excluded": row.status.value == "excluded",
     }
@@ -43,7 +43,8 @@ def build_overview(database, repository, now=None):
         for metric in MetricType:
             activity = metric in DAILY_ACTIVITY_METRICS
             current = reading_payload(
-                repository.latest_observation(DEFAULT_PERSON_ID, metric, now)
+                repository.latest_observation(DEFAULT_PERSON_ID, metric, now),
+                bounded=False,
             )
             if current and datetime.fromisoformat(current["observed_at"]) > now:
                 current = None
@@ -145,8 +146,10 @@ def build_overview(database, repository, now=None):
                             "t": row["observed_at"],
                             "v": row["value"],
                             "provider": row["provider"][:120],
+                            "source_changed": index > 0
+                            and row["provider"] != points[index - 1]["provider"],
                         }
-                        for row in points
+                        for index, row in enumerate(points)
                     ],
                 }
             )
