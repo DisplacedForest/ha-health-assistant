@@ -207,3 +207,110 @@ async def test_contested_metric_agrees_across_sensor_and_websocket(
     assert weight["value"] == 80.0
     assert weight["provider"] == "test_scale"
     assert weight["possible_duplicate"] is True
+
+
+async def test_exclusion_and_restore_refresh_entities_and_queries(
+    hass, hass_ws_client, config_entry
+):
+    await setup_integration(hass, config_entry)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_body_measurement",
+        {"weight": 80.0, "external_id": "bad-scale-reading"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json(
+        {"id": 1, "type": f"{DOMAIN}/observations", "metric": "weight"}
+    )
+    response = await client.receive_json()
+    observation = response["result"]["observations"][0]
+    assert observation["excluded"] is False
+    await client.send_json(
+        {
+            "id": 2,
+            "type": f"{DOMAIN}/observation_exclusion",
+            "observation_id": observation["id"],
+            "excluded": True,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"]
+    assert response["result"]["excluded"] is True
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.health_assistant_current_weight").state == "unknown"
+    await client.send_json({"id": 3, "type": f"{DOMAIN}/summary"})
+    assert (await client.receive_json())["result"]["current_weight"] is None
+    await client.send_json(
+        {"id": 4, "type": f"{DOMAIN}/time_series", "metric": "weight"}
+    )
+    assert (await client.receive_json())["result"]["points"] == []
+    await client.send_json(
+        {"id": 5, "type": f"{DOMAIN}/observations", "excluded": True}
+    )
+    assert len((await client.receive_json())["result"]["observations"]) == 1
+    await client.send_json(
+        {
+            "id": 6,
+            "type": f"{DOMAIN}/observation_exclusion",
+            "observation_id": observation["id"],
+            "excluded": False,
+        }
+    )
+    assert (await client.receive_json())["success"]
+    await hass.async_block_till_done()
+    assert (
+        float(hass.states.get("sensor.health_assistant_current_weight").state) == 80.0
+    )
+
+
+async def test_exclusion_rejects_invalid_missing_and_unloaded_records(
+    hass, hass_ws_client, config_entry
+):
+    await setup_integration(hass, config_entry)
+    client = await hass_ws_client(hass)
+    for request_id, identifier in enumerate([0, -1, True, "1", 1.5, 2**63, 999], 1):
+        await client.send_json(
+            {
+                "id": request_id,
+                "type": f"{DOMAIN}/observation_exclusion",
+                "observation_id": identifier,
+                "excluded": True,
+            }
+        )
+        response = await client.receive_json()
+        assert response["success"] is False
+        assert response["error"]["code"] == (
+            "not_found" if identifier == 999 else "invalid_format"
+        )
+    await client.send_json({"id": 8, "type": f"{DOMAIN}/observations", "limit": 101})
+    assert (await client.receive_json())["success"] is False
+    await hass.config_entries.async_unload(config_entry.entry_id)
+    await client.send_json(
+        {
+            "id": 9,
+            "type": f"{DOMAIN}/observation_exclusion",
+            "observation_id": 1,
+            "excluded": True,
+        }
+    )
+    assert (await client.receive_json())["error"]["code"] == "not_loaded"
+
+
+async def test_read_only_user_cannot_change_observation_exclusion(
+    hass, hass_ws_client, hass_read_only_access_token, config_entry
+):
+    await setup_integration(hass, config_entry)
+    client = await hass_ws_client(hass, access_token=hass_read_only_access_token)
+    await client.send_json(
+        {
+            "id": 1,
+            "type": f"{DOMAIN}/observation_exclusion",
+            "observation_id": 1,
+            "excluded": True,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"] is False
+    assert response["error"]["code"] == "unauthorized"

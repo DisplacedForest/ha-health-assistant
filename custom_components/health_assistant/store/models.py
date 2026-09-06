@@ -37,6 +37,7 @@ DAILY_ACTIVITY_METRICS = frozenset(
 
 class RecordStatus(StrEnum):
     ACTIVE = "active"
+    EXCLUDED = "excluded"
 
 
 @dataclass(frozen=True, slots=True)
