@@ -58,6 +58,7 @@ class HealthAssistantPanel extends LitElement {
     this._records = [];
     this._request = 0;
     this._detailRequest = 0;
+    this._dialogSession = 0;
   }
 
   get _domain() {
@@ -116,17 +117,20 @@ class HealthAssistantPanel extends LitElement {
   }
 
   async _openDetail(metric, event) {
+    const session = ++this._dialogSession;
     this._opener = event?.currentTarget;
     this._detailMetric = metric;
     this._detail = undefined;
     this._showExcluded = false;
     this._records = [];
     await this.updateComplete;
+    if (session !== this._dialogSession) return;
     this.shadowRoot.querySelector("dialog").showModal();
     await this._loadDetail();
   }
 
   _closeDetail() {
+    this._dialogSession++;
     this._detailRequest++;
     this.shadowRoot.querySelector("dialog")?.close();
     this._detailMetric = undefined;
@@ -162,18 +166,24 @@ class HealthAssistantPanel extends LitElement {
   async _toggleExclusion() {
     const reading = this._detail?.observation;
     if (!reading || this._busyId) return;
+    const session = this._dialogSession;
+    let request = this._detailRequest;
+    const ownsDetail = () => session === this._dialogSession && request === this._detailRequest;
     this._busyId = reading.id;
     this._detailError = undefined;
     try {
       await this.hass.callWS({type: `${this._domain}/observation_exclusion`, observation_id: reading.id, excluded: !reading.excluded});
       await this._refresh();
-      await this._loadDetail(reading.id);
+      if (ownsDetail()) {
+        request++;
+        await this._loadDetail(reading.id);
+      }
     } catch {
-      this._detailError = "The reading could not be changed. Refresh and try again.";
+      if (ownsDetail()) this._detailError = "The reading could not be changed. Refresh and try again.";
     } finally {
       this._busyId = undefined;
       await this.updateComplete;
-      this.shadowRoot.querySelector(".exclusion-control button")?.focus();
+      if (ownsDetail()) this.shadowRoot.querySelector(".exclusion-control button")?.focus();
     }
   }
 

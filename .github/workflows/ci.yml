@@ -61,6 +61,7 @@ jobs:
           cache-dependency-path: frontend-src/package-lock.json
       - run: npm --prefix frontend-src ci --no-fund --no-audit
       - run: npm --prefix frontend-src run lint
+      - run: npm --prefix frontend-src test
       - run: npm --prefix frontend-src run build
       - run: git ls-files --error-unmatch custom_components/health_assistant/frontend/dist/panel.js
       - run: git diff --exit-code custom_components/health_assistant/frontend/dist/panel.js

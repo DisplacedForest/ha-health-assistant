@@ -44,10 +44,11 @@ The Health panel's source lives in `frontend-src/` (Lit, bundled by esbuild). Th
 ```bash
 mise run frontend-build     # bundles frontend-src into the committed dist
 mise run frontend-lint      # eslint over the panel source
+mise run frontend-test      # panel interaction regression tests
 mise run frontend-verify    # rebuilds, then fails if the committed dist is stale or untracked
 ```
 
-Lint and verify run as part of `mise run check` and in CI, so a panel change pushed without a rebuilt, committed bundle fails the Frontend job. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
+Lint, interaction tests, and bundle verification run as part of `mise run check` and in CI. A panel change pushed without a rebuilt, committed bundle fails the Frontend job. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
 
 ## Installing the dev variant into a real instance
 
