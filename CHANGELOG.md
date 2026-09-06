@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
+
 - Incorrect readings can be excluded from current values and charts, then restored. Their source history is kept, and replaying the same records does not reactivate them. The database moves to schema 5; older builds cannot open it.
 
 - Diagnostics now show which sources are working, what they can import or export, and when an operation last succeeded. Error details stay out of the download to avoid exposing health data.
