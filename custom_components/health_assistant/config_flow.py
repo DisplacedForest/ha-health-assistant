@@ -21,6 +21,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_HEVY_SOURCE,
     CONF_MAPPINGS,
     CONF_SOURCE_MAPPINGS,
     DOMAIN,
@@ -28,6 +29,13 @@ from .const import (
     PROVIDER_HA_ENTITY,
     PROVIDER_MANUAL,
 )
+from .hevy_flow import (
+    KEEP_WORKOUT_SOURCE,
+    select_workout_source,
+    selected_workout_source_is_current,
+    workout_source_field,
+)
+from .hevy_source import discover_hevy
 from .paths import database_path
 from .providers.manual import ManualProvider
 from .sources import SOURCE_NAMES, SourceOffer, discover_sources
@@ -52,6 +60,7 @@ class SourceFlow:
     _pending_options: dict[str, Any] | None = None
     _priorities: dict[MetricType, str] | None = None
     _selections: dict[MetricType, str] | None = None
+    _hevy_selection: dict | None = None
 
     def _entry(self):
         return self.config_entry if isinstance(self, OptionsFlow) else None
@@ -124,6 +133,11 @@ class SourceFlow:
         offers = self._offers()
         errors = {}
         if user_input is not None:
+            hevy_binding, hevy_error = select_workout_source(
+                self.hass, self._options(), user_input
+            )
+            if hevy_error:
+                errors["workout_source"] = hevy_error
             selected = {}
             selections = {}
             profiles = {}
@@ -162,6 +176,10 @@ class SourceFlow:
                 selected[metric] = offer.key
                 selections[metric] = offer.choice
             if not errors:
+                if hevy_binding != KEEP_WORKOUT_SOURCE:
+                    self._options()[CONF_HEVY_SOURCE] = hevy_binding
+                    self._changed_options.add(CONF_HEVY_SOURCE)
+                    self._hevy_selection = hevy_binding
                 if bindings != self._options().get(CONF_SOURCE_MAPPINGS, {}):
                     self._options()[CONF_SOURCE_MAPPINGS] = bindings
                     self._changed_options.add(CONF_SOURCE_MAPPINGS)
@@ -203,9 +221,16 @@ class SourceFlow:
             fields[vol.Optional(metric.value, default=default)] = SelectSelector(
                 SelectSelectorConfig(options=choices, mode="dropdown")
             )
+        workout_field, workout_default, workout_details = workout_source_field(
+            self.hass, self._options()
+        )
+        if workout_field is not None:
+            fields[vol.Optional("workout_source", default=workout_default)] = (
+                workout_field
+            )
         fields[vol.Optional("confirm_person", default=False)] = BooleanSelector()
         fields[vol.Optional("manual_mapping", default=False)] = BooleanSelector()
-        details = []
+        details = list(workout_details)
         registry = er.async_get(self.hass)
         for offer in offers:
             mapped = [
@@ -237,6 +262,10 @@ class SourceFlow:
         return await self._finish()
 
     async def _finish(self) -> ConfigFlowResult:
+        if self._hevy_selection and not selected_workout_source_is_current(
+            self.hass, self._hevy_selection
+        ):
+            return self.async_abort(reason="source_changed")
         if self._selections:
             offers = {offer.choice: offer for offer in self._offers()}
             for metric, choice in self._selections.items():
@@ -283,7 +312,7 @@ class HealthAssistantConfigFlow(SourceFlow, ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
-        if self._offers():
+        if self._offers() or discover_hevy(self.hass):
             return await self.async_step_sources()
         return self.async_create_entry(title=NAME, data={})
 
@@ -297,7 +326,12 @@ class HealthAssistantOptionsFlow(SourceFlow, OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        if self._offers() or self._options().get(CONF_SOURCE_MAPPINGS):
+        if (
+            self._offers()
+            or discover_hevy(self.hass)
+            or self._options().get(CONF_SOURCE_MAPPINGS)
+            or self._options().get(CONF_HEVY_SOURCE)
+        ):
             return await self.async_step_sources(user_input)
         if user_input is None:
             return self.async_show_form(

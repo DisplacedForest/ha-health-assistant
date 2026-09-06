@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Health overview now leads with changes, keeps quieter readings compact, and shows recent workouts and source health. Open a metric to inspect its source claims or exclude and restore an incorrect reading. Comparisons explain missing history, older readings and source disagreements instead of presenting a bare number.
 
+- Choose a Hevy Tracker account to start keeping completed workouts and their exercise sets locally. Capture uses the latest workout exposed by the installed integration, survives restarts without duplicates, and needs no extra sign-in. History import and body-measurement export are not included.
+
 - Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
 
 - Incorrect readings can be excluded from current values and charts, then restored. Their source history is kept, and replaying the same records does not reactivate them. The database moves to schema 5; older builds cannot open it.
