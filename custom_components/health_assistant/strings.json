@@ -7,7 +7,7 @@
       },
       "sources": {
         "title": "Choose your sources",
-        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}",
+        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}\n\nWorkout choices are separate from metric priorities and do not change manual workout entry.",
         "data": {
           "weight": "Weight source",
           "body_fat_percentage": "Body fat source",
@@ -16,7 +16,8 @@
           "distance": "Distance source",
           "active_energy": "Active energy source",
           "confirm_person": "These new accounts belong to the person in this health history",
-          "manual_mapping": "Also edit manual entity mappings"
+          "manual_mapping": "Also edit manual entity mappings",
+          "workout_source": "Workout source"
         }
       },
       "manual": {
@@ -59,7 +60,7 @@
       },
       "sources": {
         "title": "Choose your sources",
-        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}",
+        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}\n\nWorkout choices are separate from metric priorities and do not change manual workout entry.",
         "data": {
           "weight": "Weight source",
           "body_fat_percentage": "Body fat source",
@@ -68,7 +69,8 @@
           "distance": "Distance source",
           "active_energy": "Active energy source",
           "confirm_person": "These new accounts belong to the person in this health history",
-          "manual_mapping": "Also edit manual entity mappings"
+          "manual_mapping": "Also edit manual entity mappings",
+          "workout_source": "Workout source"
         }
       },
       "manual": {
