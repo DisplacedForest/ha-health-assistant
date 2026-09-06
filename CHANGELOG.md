@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Export health history to a portable archive and import it into another installation. Preview changes first, keep exclusions and source details, and retry interrupted imports without duplicating records. Environmental history and stored workout sets are included.
+
 - Body is a new experimental view of your recorded week. Flip between front and back, open a muscle region for its workouts, and inspect body measurements through the same source details as Overview. Color follows recent recorded sets; unknown exercise names and missing detail are shown explicitly.
 
 - The Health overview now leads with changes, keeps quieter readings compact, and shows recent workouts and source health. Open a metric to inspect its source claims or exclude and restore an incorrect reading. Comparisons explain missing history, older readings and source disagreements instead of presenting a bare number.

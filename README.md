@@ -235,6 +235,35 @@ Health Assistant is not in the HACS default store yet; that's planned for 0.2.0 
 
 Either way, finish by adding the integration: Settings, then Devices & services, then Add integration, then Health Assistant.
 
+## Portable history
+
+Use **Export health history** in Developer tools, Actions to save your health history in a portable archive:
+
+```yaml
+action: health_assistant.export_history
+data:
+  path: health-exports/history.tar.gz
+```
+
+The path is inside your Home Assistant config directory. The action creates parent folders and refuses to overwrite an existing file. Only administrators can export or import. Archives contain sensitive health history, workout details and room metadata, so keep them somewhere private. They are compressed, not encrypted.
+
+To move history to another installation, copy the archive into that installation's config directory and run **Import health history**:
+
+```yaml
+action: health_assistant.import_history
+data:
+  path: health-exports/history.tar.gz
+  dry_run: true
+```
+
+The response lists record counts, date coverage, sources and expected changes. Dry run is on by default. Check the response, create a database backup, then call the same action with `dry_run: false` to merge the history. Repeating the same import won't duplicate it. If an import stops partway through, retry the same archive. Priorities and readings commit together; completed workout and environmental batches stay committed. Large health imports can delay incoming readings while that transaction finishes. Writes that arrive during an import can make the applied counts differ from the preview.
+
+Imports include source priorities and can change which source supplies a current value. Excluded readings stay excluded, including readings excluded on the destination. A newer local version of the same source record wins over an older archive. Environmental history retains its source and area identities; imports do not configure live sensors or restore provider accounts. Set those up separately. Room metadata describes sensor context, not your personal exposure.
+
+The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams and retained buckets. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
+
+See the [archive format and merge rules](docs/interchange-format.md) for fields, limits and recovery details. Use a SQLite or Home Assistant backup below when you need a whole-instance restore.
+
 ## Backup and restore
 
 Your health history deserves disaster recovery from day one, so 0.1 ships both paths.

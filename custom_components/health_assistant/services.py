@@ -17,6 +17,10 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PROVIDER_MANUAL
+from .interchange_services import (
+    async_setup_interchange_services,
+    async_unload_interchange_services,
+)
 from .paths import backup_directory
 from .providers import CandidateObservation, CandidateWorkout, ProviderSink
 from .store import (
@@ -193,6 +197,7 @@ async def _async_create_backup(call: ServiceCall) -> ServiceResponse:
 def async_setup_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_ADD_OBSERVATION):
         return
+    async_setup_interchange_services(hass)
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_OBSERVATION,
@@ -222,6 +227,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
 
 @callback
 def async_unload_services(hass: HomeAssistant) -> None:
+    async_unload_interchange_services(hass)
     hass.services.async_remove(DOMAIN, SERVICE_ADD_OBSERVATION)
     hass.services.async_remove(DOMAIN, SERVICE_ADD_BODY_MEASUREMENT)
     hass.services.async_remove(DOMAIN, SERVICE_ADD_WORKOUT)
