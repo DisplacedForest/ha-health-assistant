@@ -6,14 +6,17 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import HealthSummary
+from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
     DEFAULT_PERSON_ID,
     HealthObservation,
     MetricType,
+    StoreValidationError,
     Workout,
 )
 from .store.units import canonical_unit
@@ -28,6 +31,9 @@ def _observation_payload(
     if observation is None:
         return None
     return {
+        "id": observation.id,
+        "metric": observation.metric.value,
+        "excluded": observation.status.value == "excluded",
         "value": observation.value,
         "unit": observation.unit,
         "observed_at": observation.observed_at.isoformat(),
@@ -130,6 +136,7 @@ async def ws_time_series(
             "downsampled": downsampled,
             "points": [
                 {
+                    "id": row.id,
                     "t": row.observed_at.isoformat(),
                     "v": row.value,
                     "provider": row.provider,
@@ -142,7 +149,79 @@ async def ws_time_series(
     )
 
 
+def _positive_id(value: Any) -> int:
+    if type(value) is not int or not 0 < value <= 9223372036854775807:
+        raise vol.Invalid("expected a positive integer")
+    return value
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/observations",
+        vol.Optional("metric"): vol.In([metric.value for metric in MetricType]),
+        vol.Optional("excluded", default=False): bool,
+        vol.Optional("limit", default=50): vol.All(_positive_id, vol.Range(max=100)),
+        vol.Optional("before_id"): _positive_id,
+    }
+)
+@websocket_api.async_response
+async def ws_observations(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+    metric = MetricType(msg["metric"]) if "metric" in msg else None
+    rows = await hass.async_add_executor_job(
+        entry.runtime_data.repository.list_observations,
+        DEFAULT_PERSON_ID,
+        metric,
+        msg["excluded"],
+        msg["limit"],
+        msg.get("before_id"),
+    )
+    connection.send_result(
+        msg["id"],
+        {
+            "observations": [_observation_payload(row) for row in rows],
+            "next_before_id": rows[-1].id if len(rows) == msg["limit"] else None,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/observation_exclusion",
+        vol.Required("observation_id"): _positive_id,
+        vol.Required("excluded"): bool,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_observation_exclusion(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+    try:
+        observation = await hass.async_add_executor_job(
+            entry.runtime_data.repository.set_observation_excluded,
+            DEFAULT_PERSON_ID,
+            msg["observation_id"],
+            msg["excluded"],
+        )
+    except StoreValidationError:
+        connection.send_error(
+            msg["id"], "not_found", "Observation is no longer available"
+        )
+        return
+    await entry.runtime_data.coordinator.async_refresh()
+    async_dispatcher_send(hass, SIGNAL_HEALTH_DATA_UPDATED)
+    connection.send_result(msg["id"], _observation_payload(observation))
+
+
 @callback
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_summary)
     websocket_api.async_register_command(hass, ws_time_series)
+    websocket_api.async_register_command(hass, ws_observations)
+    websocket_api.async_register_command(hass, ws_observation_exclusion)

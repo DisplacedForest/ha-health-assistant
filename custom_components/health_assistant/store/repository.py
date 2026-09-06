@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import threading
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -85,9 +84,12 @@ def _require_metric(value: Any) -> MetricType:
 class HealthRepository:
     def __init__(self, database: HealthDatabase) -> None:
         self._db = database
-        self._reconcile_lock = threading.Lock()
 
     def upsert_observation(self, observation: HealthObservation) -> HealthObservation:
+        with self._db.transaction():
+            return self._upsert_observation(observation)
+
+    def _upsert_observation(self, observation: HealthObservation) -> HealthObservation:
         metric = _require_metric(observation.metric)
         canonical = CANONICAL_UNITS[metric]
         if observation.unit != canonical:
@@ -109,7 +111,8 @@ class HealthRepository:
                 unit = excluded.unit,
                 ingested_at = excluded.ingested_at,
                 provenance = excluded.provenance,
-                status = excluded.status
+                status = CASE WHEN source_claims.status = 'excluded'
+                    THEN 'excluded' ELSE excluded.status END
             RETURNING *
             """,
             (
@@ -159,6 +162,10 @@ class HealthRepository:
         return [row["provider"] for row in rows]
 
     def set_priority(self, metric: MetricType, providers: list[str]) -> None:
+        with self._db.transaction():
+            self._set_priority(metric, providers)
+
+    def _set_priority(self, metric: MetricType, providers: list[str]) -> None:
         metric = _require_metric(metric)
         cleaned = [_require_text(provider, "provider") for provider in providers]
         if len(set(cleaned)) != len(cleaned):
@@ -206,7 +213,7 @@ class HealthRepository:
 
     def reconcile_metric(self, person_id: str, metric: MetricType) -> None:
         metric = _require_metric(metric)
-        with self._reconcile_lock:
+        with self._db.transaction():
             claims = self._fetch_claims(person_id, metric)
             self._apply_reconciliation(person_id, metric, claims, None, None)
 
@@ -216,7 +223,7 @@ class HealthRepository:
         suspicious = rule.suspicious_window or timedelta(0)
         band = suspicious + merge
         fetch = 2 * band
-        with self._reconcile_lock:
+        with self._db.transaction():
             claims = self._fetch_claims(
                 claim.person_id,
                 claim.metric,
@@ -281,6 +288,19 @@ class HealthRepository:
                 if claim.observation_id is not None
             )
             supplier = supplying_claim(group, priority)
+            status = (
+                RecordStatus.EXCLUDED
+                if any(claim.status is RecordStatus.EXCLUDED for claim in group)
+                else RecordStatus.ACTIVE
+            )
+            for claim in group:
+                if claim.status is not status:
+                    statements.append(
+                        (
+                            "UPDATE source_claims SET status = ? WHERE id = ?",
+                            (status.value, claim.id),
+                        )
+                    )
             flag = 1 if index in flagged else 0
             desired = (
                 person_id,
@@ -292,7 +312,7 @@ class HealthRepository:
                 supplier.external_id,
                 _to_stored_datetime(supplier.ingested_at, "ingested_at"),
                 _to_stored_provenance(supplier.provenance),
-                RecordStatus(supplier.status).value,
+                status.value,
                 flag,
             )
             current = existing.get(canonical_id)
@@ -355,6 +375,72 @@ class HealthRepository:
         if statements:
             self._db.execute_batch(statements)
 
+    def get_observation(
+        self, person_id: str, observation_id: int
+    ) -> HealthObservation | None:
+        self._validate_observation_id(observation_id)
+        rows = self._db.execute(
+            _OBSERVATION_SELECT + " WHERE o.person_id = ? AND o.id = ?",
+            (person_id, observation_id),
+        )
+        return self._observation_from_row(rows[0]) if rows else None
+
+    @staticmethod
+    def _validate_observation_id(observation_id: int) -> None:
+        if (
+            type(observation_id) is not int
+            or not 0 < observation_id <= 9223372036854775807
+        ):
+            raise StoreValidationError("observation id must be a positive integer")
+
+    def list_observations(
+        self,
+        person_id: str,
+        metric: MetricType | None = None,
+        excluded: bool = False,
+        limit: int = 100,
+        before_id: int | None = None,
+    ) -> list[HealthObservation]:
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise StoreValidationError("limit must be an integer between 1 and 100")
+        if type(excluded) is not bool:
+            raise StoreValidationError("excluded must be a boolean")
+        sql = _OBSERVATION_SELECT + " WHERE o.person_id = ? AND o.status = ?"
+        params: list[Any] = [person_id, "excluded" if excluded else "active"]
+        if metric is not None:
+            sql += " AND o.metric = ?"
+            params.append(_require_metric(metric).value)
+        if before_id is not None:
+            self._validate_observation_id(before_id)
+            sql += " AND o.id < ?"
+            params.append(before_id)
+        sql += " ORDER BY o.id DESC LIMIT ?"
+        params.append(limit)
+        return [
+            self._observation_from_row(row) for row in self._db.execute(sql, params)
+        ]
+
+    def set_observation_excluded(
+        self, person_id: str, observation_id: int, excluded: bool
+    ) -> HealthObservation:
+        self._validate_observation_id(observation_id)
+        if type(excluded) is not bool:
+            raise StoreValidationError("excluded must be a boolean")
+        with self._db.transaction():
+            observation = self.get_observation(person_id, observation_id)
+            if observation is None:
+                raise StoreValidationError("observation not found")
+            status = RecordStatus.EXCLUDED if excluded else RecordStatus.ACTIVE
+            self._db.execute(
+                "UPDATE source_claims SET status = ? WHERE observation_id = ? AND person_id = ?",
+                (status.value, observation_id, person_id),
+            )
+            self.reconcile_metric(person_id, observation.metric)
+            result = self.get_observation(person_id, observation_id)
+            if result is None:
+                raise StoreValidationError("observation changed during reconciliation")
+            return result
+
     def get_observations(
         self,
         person_id: str,
@@ -362,7 +448,7 @@ class HealthRepository:
         start: datetime | None = None,
         end: datetime | None = None,
     ) -> list[HealthObservation]:
-        sql = _OBSERVATION_SELECT + " WHERE o.person_id = ?"
+        sql = _OBSERVATION_SELECT + " WHERE o.person_id = ? AND o.status = 'active'"
         params: list[Any] = [person_id]
         if metric is not None:
             sql += " AND o.metric = ?"
@@ -383,7 +469,7 @@ class HealthRepository:
         rows = self._db.execute(
             _OBSERVATION_SELECT
             + """
-            WHERE o.person_id = ? AND o.metric = ?
+            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ?
             ORDER BY o.observed_at DESC, o.id DESC
             LIMIT 1
             """,
@@ -398,7 +484,7 @@ class HealthRepository:
         contested = self._db.execute(
             _OBSERVATION_SELECT
             + """
-            WHERE o.person_id = ? AND o.metric = ? AND o.observed_at >= ?
+            WHERE o.person_id = ? AND o.status = 'active' AND o.metric = ? AND o.observed_at >= ?
             """,
             (
                 person_id,

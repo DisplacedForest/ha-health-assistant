@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,8 @@ class HealthDatabase:
     def __init__(self, path: Path) -> None:
         self._path = path
         self._conn: sqlite3.Connection | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._transaction_depth = 0
 
     @property
     def path(self) -> Path:
@@ -68,17 +70,43 @@ class HealthDatabase:
                 raise StoreError("database is not open")
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        with self._lock:
+            if self._conn is None:
+                raise StoreError("database is not open")
+            depth = self._transaction_depth
+            savepoint = f"health_transaction_{depth}"
+            self._conn.execute(
+                "BEGIN IMMEDIATE" if depth == 0 else f"SAVEPOINT {savepoint}"
+            )
+            self._transaction_depth += 1
+            try:
+                yield
+                if depth == 0:
+                    self._conn.commit()
+                else:
+                    self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            except BaseException:
+                if depth == 0:
+                    self._conn.rollback()
+                else:
+                    self._conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                    self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                raise
+            finally:
+                self._transaction_depth -= 1
+
     def execute(self, sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
         with self._lock:
             if self._conn is None:
                 raise StoreError("database is not open")
+            if self._transaction_depth:
+                return self._conn.execute(sql, tuple(params)).fetchall()
             with self._conn:
                 return self._conn.execute(sql, tuple(params)).fetchall()
 
     def execute_batch(self, statements: Iterable[tuple[str, Iterable[Any]]]) -> None:
-        with self._lock:
-            if self._conn is None:
-                raise StoreError("database is not open")
-            with self._conn:
-                for sql, params in statements:
-                    self._conn.execute(sql, tuple(params))
+        with self.transaction():
+            for sql, params in statements:
+                self.execute(sql, params)
