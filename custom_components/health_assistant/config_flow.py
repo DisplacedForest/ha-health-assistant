@@ -239,11 +239,20 @@ class SourceFlow:
     async def _finish(self) -> ConfigFlowResult:
         if self._selections:
             offers = {offer.choice: offer for offer in self._offers()}
-            if any(
-                choice not in offers or metric not in offers[choice].metrics
-                for metric, choice in self._selections.items()
-            ):
-                return self.async_abort(reason="source_changed")
+            for metric, choice in self._selections.items():
+                offer = offers.get(choice)
+                if offer is None or metric not in offer.metrics:
+                    return self.async_abort(reason="source_changed")
+                if offer.config_entry_id is not None:
+                    binding = (
+                        self._options().get(CONF_SOURCE_MAPPINGS, {}).get(offer.key, {})
+                    )
+                    if binding.get(
+                        "config_entry_id"
+                    ) != offer.config_entry_id or binding.get("entities", {}).get(
+                        metric.value
+                    ) != offer.entities.get(metric):
+                        return self.async_abort(reason="source_changed")
         if self._priorities:
 
             def save(repository):

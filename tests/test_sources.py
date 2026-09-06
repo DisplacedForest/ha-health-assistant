@@ -469,3 +469,49 @@ async def test_curated_provider_stops_when_registry_ownership_changes(
         MetricType.WEIGHT,
     )
     assert [row.value for row in rows] == [80]
+
+
+@pytest.mark.parametrize("replacement", [False, True])
+async def test_manual_step_validates_exact_binding_but_allows_entity_rename(
+    hass, config_entry, replacement
+):
+    source = source_entry(hass)
+    entity = source_sensor(hass, source)
+    await setup_health(hass, config_entry)
+    flow = await choose_source(hass, config_entry, source, manual_mapping=True)
+    registry = er.async_get(hass)
+    if replacement:
+        registry.async_update_entity(entity.entity_id, new_unique_id="retired_weight")
+        new_entity = source_sensor(hass, source, value="81")
+        assert new_entity.id != entity.id
+    else:
+        registry.async_update_entity(entity.entity_id, new_entity_id="sensor.new_name")
+        hass.states.async_set("sensor.new_name", "81", {"unit_of_measurement": "kg"})
+    result = await hass.config_entries.options.async_configure(
+        flow["flow_id"], user_input={}
+    )
+    await hass.async_block_till_done()
+    repository = config_entry.runtime_data.repository
+    priority = await hass.async_add_executor_job(
+        repository.get_priority, MetricType.WEIGHT
+    )
+    rows = await hass.async_add_executor_job(
+        repository.get_observations, "primary", MetricType.WEIGHT
+    )
+    if replacement:
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "source_changed"
+        assert CONF_SOURCE_MAPPINGS not in config_entry.options
+        assert "withings" not in priority
+        assert rows == []
+    else:
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert (
+            config_entry.options[CONF_SOURCE_MAPPINGS]["withings"]["entities"]["weight"]
+            == entity.id
+        )
+        assert priority[0] == "withings"
+        assert len(rows) == 1
+        assert rows[0].value == 81
+        assert rows[0].provider == "withings"
+        assert rows[0].external_id == entity.id
