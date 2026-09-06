@@ -27,6 +27,14 @@ Health Assistant treats health as a first-class domain:
 - **A real health UX.** Longitudinal health analytics don't fit well into Lovelace cards, so Health Assistant ships a dedicated Health panel.
 - **HA-native automations.** Health transitions and environmental context become events and triggers you can automate on.
 
+## Incorrect readings
+
+An excluded reading stays in your local history and keeps its source information, but it no longer contributes to current values, daily activity or charts. You can restore it later. Exclusion is not deletion or privacy erasure.
+
+Exclusion follows the source records behind a measurement. Replaying those records or changing source priority does not bring the reading back. A new source report that merges into the same measurement inherits its exclusion. A distinct reading remains visible. Matching still depends on the source identity, timestamp and metric's reconciliation rules; a source that presents a bad reading as a different measurement may need another exclusion.
+
+The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` provide this behavior. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. Changes require a Home Assistant administrator. The command accepts `observation_id` and an `excluded` boolean. Full value editing and permanent erasure are not available in this release.
+
 ## Privacy
 
 Privacy by default. Health Assistant has no cloud component and requires no external service to run.
