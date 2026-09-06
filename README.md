@@ -84,9 +84,23 @@ Core concepts:
 
 ## Getting data in
 
-Two paths, no vendor lock-in either way.
+**Choose a source.** Install and sign in to Withings or Fitbit through Home Assistant first. Health Assistant offers the accounts it finds during setup and under Settings, Devices & services, Health Assistant, Configure. Choose an account for each metric and confirm that new accounts belong to the person in this health history. No passwords or vendor sign-ins pass through Health Assistant.
 
-**Map existing sensors.** Open the integration's options (Settings, then Devices & services, then Health Assistant, then Configure) and pick the sensors that feed each metric: weight, body fat percentage, lean mass, steps, distance, and active energy. Any sensor already in Home Assistant works, whatever integration it comes from. State changes are validated, converted from the sensor's unit (or your configured unit system when the sensor doesn't declare one), and stored with the entity ID as provenance. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
+| Source | Automatic mapping | Limits |
+| --- | --- | --- |
+| Withings | Weight, body fat percentage, lean mass, steps, distance | Uses the standard Home Assistant integration's registered sensor identifiers. Active energy is not mapped because its advertised calorie unit needs a verified conversion. |
+| Fitbit | Weight, body fat percentage, steps, distance | Uses the standard Home Assistant integration. Tracker-only variants and calorie sensors are not mapped automatically. |
+| Garmin Connect | Detection only for the `garmin_connect` integration domain | Use manual entity mapping. No sensor contract has been verified yet. |
+| Apple Health / Health Connect bridges | Detection only for `apple_health` and `health_connect` integration domains | Other bridges use manual mapping. There is no shared bridge entity contract yet. |
+| Other registered providers | Declared metric coverage appears in the same options chooser | The adapter must be registered and support importing that metric. |
+
+The source list shows the actual entities and warns about missing, disabled, unavailable, ambiguous, or incompatible sensors. Only ready sensors can be selected. Renamed entities are matched by their registry identity, so changing an entity ID does not break a curated mapping. Curated sources require an explicit, compatible unit on every reading.
+
+Choosing a source puts it first in that metric's existing priority order. The database holds that order; there is no separate setup preference to keep in sync. Choosing a different source keeps existing mappings active. Choosing a different account from the same integration replaces that integration's mappings and keeps its recorded history. Choose accounts for one person only.
+
+Withings and Fitbit readings retain their source names in the stored records, summary sensor attributes, and panel data. Existing manual mappings keep their generic entity provenance. Capture starts with the sensor's current state and continues on future updates; this does not import the vendor's past history. A source that becomes unavailable later keeps its mapping and resumes when valid readings return.
+
+**Map sensors manually.** Use this for templates, unknown integrations, or metrics without an automatic map. Select **Also edit manual entity mappings** in the source chooser. If no known sources are installed, Configure opens the manual form directly. Map sensors to weight, body fat percentage, lean mass, steps, distance, or active energy. State changes are converted from the sensor's unit, or your configured unit system when a manual sensor has no unit. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
 
 **Manual actions.** Three actions write records directly, including backfill with explicit timestamps:
 

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
+
 - Diagnostics now show which sources are working, what they can import or export, and when an operation last succeeded. Error details stay out of the download to avoid exposing health data.
 
 - Cross-source conflict resolution: a configurable per-metric source priority order decides the canonical current value when sources disagree, semantic duplicate matching adds a per-metric value tolerance to the merge windows, and one resolution rule serves sensors, the panel, and store queries alike. Reordering priority re-resolves from retained claims with no data loss. The database migrates to schema version 4. Multi-source installs may see contested current values shift once when priority defaults first apply.

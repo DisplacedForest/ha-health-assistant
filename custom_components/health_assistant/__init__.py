@@ -10,11 +10,12 @@ from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN
+from .const import CONF_SOURCE_MAPPINGS, DOMAIN
 from .coordinator import HealthSummaryCoordinator
 from .panel import async_register_panel, async_remove_panel
 from .paths import backup_directory, database_path
 from .providers import EntityProvider, ManualProvider, ProviderRegistry
+from .providers.curated_entity import CuratedEntityProvider
 from .services import async_setup_services, async_unload_services
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
@@ -80,6 +81,8 @@ async def async_setup_entry(
     registry = ProviderRegistry(hass, repository)
     registry.register(EntityProvider(hass, entry))
     registry.register(ManualProvider())
+    for key, binding in entry.options.get(CONF_SOURCE_MAPPINGS, {}).items():
+        registry.register(CuratedEntityProvider(hass, key, binding))
     coordinator = HealthSummaryCoordinator(hass, entry, repository)
     entry.runtime_data = HealthAssistantData(
         database=database,
