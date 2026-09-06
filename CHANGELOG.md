@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A sensor mapped to more than one metric now updates all of them. Previously, only the last mapping was used. Existing mappings keep working without any setup changes.
+
 ### Added
 
 - Cross-source conflict resolution: a configurable per-metric source priority order decides the canonical current value when sources disagree, semantic duplicate matching adds a per-metric value tolerance to the merge windows, and one resolution rule serves sensors, the panel, and store queries alike. Reordering priority re-resolves from retained claims with no data loss. The database migrates to schema version 4. Multi-source installs may see contested current values shift once when priority defaults first apply.
