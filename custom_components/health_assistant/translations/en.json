@@ -4,17 +4,24 @@
       "user": {
         "title": "Health Assistant",
         "description": "Set up Health Assistant. All health data stays local to this Home Assistant instance."
-      }
-    },
-    "abort": {
-      "already_configured": "Health Assistant is already configured. Only one instance is supported."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Entity mappings",
-        "description": "Map existing sensors to canonical health metrics. Mapped sensors are ingested into the local health store as their state changes.",
+      },
+      "sources": {
+        "title": "Choose your sources",
+        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}",
+        "data": {
+          "weight": "Weight source",
+          "body_fat_percentage": "Body fat source",
+          "lean_mass": "Lean mass source",
+          "steps": "Steps source",
+          "distance": "Distance source",
+          "active_energy": "Active energy source",
+          "confirm_person": "These new accounts belong to the person in this health history",
+          "manual_mapping": "Also edit manual entity mappings"
+        }
+      },
+      "manual": {
+        "title": "Manual entity mapping",
+        "description": "Use existing sensors for sources without an automatic map. Readings are captured from the current sensor state and future updates; past history is not imported.",
         "data": {
           "weight": "Weight sensors",
           "body_fat_percentage": "Body fat percentage sensors",
@@ -24,6 +31,67 @@
           "active_energy": "Active energy sensors"
         }
       }
+    },
+    "abort": {
+      "already_configured": "Health Assistant is already configured. Only one instance is supported.",
+      "store_unavailable": "The health database could not be opened or updated. Check the integration status and try again.",
+      "source_changed": "A selected source became unavailable before saving. No mappings were changed. Open Configure and try again once the source is ready."
+    },
+    "error": {
+      "source_unavailable": "This source is no longer ready for this metric. Check its status below.",
+      "different_profiles": "Choose one account per integration for this health history.",
+      "confirm_person": "Confirm that the new accounts belong to the person in this health history."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manual entity mapping",
+        "description": "Use existing sensors for sources without an automatic map. Readings are captured from the current sensor state and future updates; past history is not imported.",
+        "data": {
+          "weight": "Weight sensors",
+          "body_fat_percentage": "Body fat percentage sensors",
+          "lean_mass": "Lean mass sensors",
+          "steps": "Step count sensors",
+          "distance": "Distance sensors",
+          "active_energy": "Active energy sensors"
+        }
+      },
+      "sources": {
+        "title": "Choose your sources",
+        "description": "Choose the account that belongs to you for each metric. This health history is for one person. Your choice becomes the first source in that metric's priority order. Existing manual mappings stay active. Changing accounts replaces that integration's mappings but keeps its recorded history. Readings start from the current sensor state; past history is not imported.\n\n{source_details}",
+        "data": {
+          "weight": "Weight source",
+          "body_fat_percentage": "Body fat source",
+          "lean_mass": "Lean mass source",
+          "steps": "Steps source",
+          "distance": "Distance source",
+          "active_energy": "Active energy source",
+          "confirm_person": "These new accounts belong to the person in this health history",
+          "manual_mapping": "Also edit manual entity mappings"
+        }
+      },
+      "manual": {
+        "title": "Manual entity mapping",
+        "description": "Use existing sensors for sources without an automatic map. Readings are captured from the current sensor state and future updates; past history is not imported.",
+        "data": {
+          "weight": "Weight sensors",
+          "body_fat_percentage": "Body fat percentage sensors",
+          "lean_mass": "Lean mass sensors",
+          "steps": "Step count sensors",
+          "distance": "Distance sensors",
+          "active_energy": "Active energy sensors"
+        }
+      }
+    },
+    "abort": {
+      "store_unavailable": "The health database could not be opened or updated. Check the integration status and try again.",
+      "source_changed": "A selected source became unavailable before saving. No mappings were changed. Open Configure and try again once the source is ready."
+    },
+    "error": {
+      "source_unavailable": "This source is no longer ready for this metric. Check its status below.",
+      "different_profiles": "Choose one account per integration for this health history.",
+      "confirm_person": "Confirm that the new accounts belong to the person in this health history."
     }
   },
   "services": {

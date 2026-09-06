@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -165,6 +165,15 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             SELECT metric, '', 0, provider FROM metric_preferences
             """,
             "DROP TABLE metric_preferences",
+        ),
+    ),
+    (
+        5,
+        (
+            """
+            CREATE INDEX idx_observations_person_status_id
+            ON observations (person_id, status, id)
+            """,
         ),
     ),
 )

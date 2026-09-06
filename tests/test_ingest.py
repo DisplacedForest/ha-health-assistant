@@ -132,3 +132,112 @@ async def test_options_change_takes_effect_without_restart(hass):
     rows = await get_weight_rows(hass, entry)
     assert len(rows) == 1
     assert rows[0].external_id == "sensor.new_scale"
+
+
+async def get_metric_rows(hass, entry, metric):
+    return await hass.async_add_executor_job(
+        entry.runtime_data.repository.get_observations, "primary", metric
+    )
+
+
+async def test_one_state_ingests_every_mapped_metric_and_survives_reload(hass):
+    entry = await setup_entry(
+        hass,
+        make_entry(
+            {
+                CONF_MAPPINGS: {
+                    "weight": ["sensor.shared_mass"],
+                    "lean_mass": ["sensor.shared_mass"],
+                }
+            }
+        ),
+    )
+    hass.states.async_set("sensor.shared_mass", "120", {"unit_of_measurement": "lb"})
+    await hass.async_block_till_done()
+    observed_at = hass.states.get("sensor.shared_mass").last_updated
+
+    for metric in (MetricType.WEIGHT, MetricType.LEAN_MASS):
+        rows = await get_metric_rows(hass, entry, metric)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.metric == metric
+        assert row.value == pytest.approx(120 * LB_TO_KG)
+        assert row.unit == "kg"
+        assert row.observed_at == observed_at
+        assert row.provider == PROVIDER_HA_ENTITY
+        assert row.external_id == "sensor.shared_mass"
+        assert row.provenance == {
+            "entity_id": "sensor.shared_mass",
+            "source_unit": "lb",
+            "raw_value": "120",
+        }
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    for metric in (MetricType.WEIGHT, MetricType.LEAN_MASS):
+        assert len(await get_metric_rows(hass, entry, metric)) == 1
+
+
+@pytest.mark.parametrize("metrics", [("distance", "weight"), ("weight", "distance")])
+async def test_invalid_unit_for_one_metric_does_not_block_another(hass, metrics):
+    entry = await setup_entry(
+        hass,
+        make_entry(
+            {CONF_MAPPINGS: {metric: ["sensor.shared_reading"] for metric in metrics}}
+        ),
+    )
+    hass.states.async_set("sensor.shared_reading", "80", {"unit_of_measurement": "kg"})
+    await hass.async_block_till_done()
+    assert await get_metric_rows(hass, entry, MetricType.DISTANCE) == []
+    rows = await get_weight_rows(hass, entry)
+    assert len(rows) == 1
+    assert rows[0].value == 80
+    assert rows[0].unit == "kg"
+
+
+async def test_missing_unit_uses_each_mapped_metrics_default(hass):
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    hass.states.async_set("sensor.shared_reading", "80")
+    entry = await setup_entry(
+        hass,
+        make_entry(
+            {
+                CONF_MAPPINGS: {
+                    "weight": ["sensor.shared_reading"],
+                    "body_fat_percentage": ["sensor.shared_reading"],
+                }
+            }
+        ),
+    )
+    weight = await get_weight_rows(hass, entry)
+    fat = await get_metric_rows(hass, entry, MetricType.BODY_FAT_PERCENTAGE)
+    assert len(weight) == len(fat) == 1
+    assert weight[0].value == pytest.approx(80 * LB_TO_KG)
+    assert weight[0].unit == "kg"
+    assert weight[0].provenance["source_unit"] == "lb"
+    assert fat[0].value == 80
+    assert fat[0].unit == "%"
+    assert fat[0].provenance["source_unit"] == "%"
+
+
+async def test_options_flow_keeps_multiple_metrics_for_one_entity(hass):
+    entry = await setup_entry(
+        hass, make_entry({CONF_MAPPINGS: {"weight": ["sensor.shared_mass"]}})
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["data_schema"]({})["weight"] == ["sensor.shared_mass"]
+    mappings = {
+        "weight": ["sensor.shared_mass"],
+        "lean_mass": ["sensor.shared_mass"],
+    }
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input=mappings
+    )
+    await hass.async_block_till_done()
+    assert entry.options == {CONF_MAPPINGS: mappings}
+    hass.states.async_set("sensor.shared_mass", "80", {"unit_of_measurement": "kg"})
+    await hass.async_block_till_done()
+    for metric in (MetricType.WEIGHT, MetricType.LEAN_MASS):
+        rows = await get_metric_rows(hass, entry, metric)
+        assert len(rows) == 1
+        assert rows[0].value == 80

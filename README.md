@@ -27,6 +27,14 @@ Health Assistant treats health as a first-class domain:
 - **A real health UX.** Longitudinal health analytics don't fit well into Lovelace cards, so Health Assistant ships a dedicated Health panel.
 - **HA-native automations.** Health transitions and environmental context become events and triggers you can automate on.
 
+## Incorrect readings
+
+An excluded reading stays in your local history and keeps its source information, but it no longer contributes to current values, daily activity or charts. You can restore it later. Exclusion is not deletion or privacy erasure.
+
+Exclusion follows the source records behind a measurement. Replaying those records or changing source priority does not bring the reading back. A new source report that merges into the same measurement inherits its exclusion. A distinct reading remains visible. Matching still depends on the source identity, timestamp and metric's reconciliation rules; a source that presents a bad reading as a different measurement may need another exclusion.
+
+The authenticated WebSocket commands `health_assistant/observations` and `health_assistant/observation_exclusion` provide this behavior. Listing supports metric and excluded-state filters, at most 100 records, and a `before_id` cursor. Changes require a Home Assistant administrator. The command accepts `observation_id` and an `excluded` boolean. Full value editing and permanent erasure are not available in this release.
+
 ## Privacy
 
 Privacy by default. Health Assistant has no cloud component and requires no external service to run.
@@ -41,7 +49,7 @@ What is stored, and where:
 What Health Assistant never does:
 
 - It never sends your health data anywhere. There are no outbound connections, no telemetry, no analytics. Data only leaves your instance if you explicitly connect a future provider that syncs with an outside service, and even then the canonical store stays local.
-- Diagnostics downloads are redacted by an allowlist: they contain record counts, schema version, provider names, mapping counts, and database health, never measurements, workout titles, or provenance payloads. Nothing appears in diagnostics unless it is explicitly named safe.
+- Diagnostics downloads include record counts, schema version, provider keys and capabilities, mapping counts, and database health. Provider status includes whether it is degraded and when an operation last succeeded. That timestamp is not the time of the latest measurement. Status starts fresh when the integration reloads. A previous failure appears as `provider_error`, even after recovery; the degraded flag tells you whether the provider has recovered. Raw errors, measurements, workout titles, provider cursors, and provenance payloads are excluded.
 - Uninstalling the integration never deletes your database.
 
 ## Which source wins
@@ -84,9 +92,23 @@ Core concepts:
 
 ## Getting data in
 
-Two paths, no vendor lock-in either way.
+**Choose a source.** Install and sign in to Withings or Fitbit through Home Assistant first. Health Assistant offers the accounts it finds during setup and under Settings, Devices & services, Health Assistant, Configure. Choose an account for each metric and confirm that new accounts belong to the person in this health history. No passwords or vendor sign-ins pass through Health Assistant.
 
-**Map existing sensors.** Open the integration's options (Settings, then Devices & services, then Health Assistant, then Configure) and pick the sensors that feed each metric: weight, body fat percentage, lean mass, steps, distance, and active energy. Any sensor already in Home Assistant works, whatever integration it comes from. State changes are validated, converted from the sensor's unit (or your configured unit system when the sensor doesn't declare one), and stored with the entity ID as provenance. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
+| Source | Automatic mapping | Limits |
+| --- | --- | --- |
+| Withings | Weight, body fat percentage, lean mass, steps, distance | Uses the standard Home Assistant integration's registered sensor identifiers. Active energy is not mapped because its advertised calorie unit needs a verified conversion. |
+| Fitbit | Weight, body fat percentage, steps, distance | Uses the standard Home Assistant integration. Tracker-only variants and calorie sensors are not mapped automatically. |
+| Garmin Connect | Detection only for the `garmin_connect` integration domain | Use manual entity mapping. No sensor contract has been verified yet. |
+| Apple Health / Health Connect bridges | Detection only for `apple_health` and `health_connect` integration domains | Other bridges use manual mapping. There is no shared bridge entity contract yet. |
+| Other registered providers | Declared metric coverage appears in the same options chooser | The adapter must be registered and support importing that metric. |
+
+The source list shows the actual entities and warns about missing, disabled, unavailable, ambiguous, or incompatible sensors. Only ready sensors can be selected. Renamed entities are matched by their registry identity, so changing an entity ID does not break a curated mapping. Curated sources require an explicit, compatible unit on every reading.
+
+Choosing a source puts it first in that metric's existing priority order. The database holds that order; there is no separate setup preference to keep in sync. Choosing a different source keeps existing mappings active. Choosing a different account from the same integration replaces that integration's mappings and keeps its recorded history. Choose accounts for one person only.
+
+Withings and Fitbit readings retain their source names in the stored records, summary sensor attributes, and panel data. Existing manual mappings keep their generic entity provenance. Capture starts with the sensor's current state and continues on future updates; this does not import the vendor's past history. A source that becomes unavailable later keeps its mapping and resumes when valid readings return.
+
+**Map sensors manually.** Use this for templates, unknown integrations, or metrics without an automatic map. Select **Also edit manual entity mappings** in the source chooser. If no known sources are installed, Configure opens the manual form directly. Map sensors to weight, body fat percentage, lean mass, steps, distance, or active energy. State changes are converted from the sensor's unit, or your configured unit system when a manual sensor has no unit. Unknown, unavailable, or non-numeric states are never stored. Mapping changes apply immediately.
 
 **Manual actions.** Three actions write records directly, including backfill with explicit timestamps:
 
