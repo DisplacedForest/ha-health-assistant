@@ -169,12 +169,12 @@ async def test_polled_provider_syncs_on_interval(
     await registry.async_start()
     freezer.tick(short_interval * 2)
     async_fire_time_changed(hass, dt_util.utcnow())
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert provider.sync_calls == [{}]
     await registry.async_stop()
     freezer.tick(short_interval * 2)
     async_fire_time_changed(hass, dt_util.utcnow())
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert provider.sync_calls == [{}]
 
 

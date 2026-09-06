@@ -12,13 +12,14 @@ from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import CONF_SOURCE_MAPPINGS, DOMAIN
+from .const import CONF_HEVY_SOURCE, CONF_SOURCE_MAPPINGS, DOMAIN
 from .coordinator import HealthSummaryCoordinator
 from .environment import CONF_ENVIRONMENT, EnvironmentalCapture
 from .panel import async_register_panel, async_remove_panel
 from .paths import backup_directory, database_path
 from .providers import EntityProvider, ManualProvider, ProviderRegistry
 from .providers.curated_entity import CuratedEntityProvider
+from .providers.hevy import HevyProvider
 from .services import async_setup_services, async_unload_services
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
@@ -91,6 +92,10 @@ async def async_setup_entry(
     registry.register(ManualProvider())
     for key, binding in entry.options.get(CONF_SOURCE_MAPPINGS, {}).items():
         registry.register(CuratedEntityProvider(hass, key, binding))
+    if binding := entry.options.get(CONF_HEVY_SOURCE):
+        registry.register(
+            HevyProvider(hass, binding, lambda: registry.async_sync("hevy"))
+        )
     coordinator = HealthSummaryCoordinator(hass, entry, repository)
     environment = EnvironmentalCapture(
         hass, database, entry.options.get(CONF_ENVIRONMENT, []), entry.entry_id
