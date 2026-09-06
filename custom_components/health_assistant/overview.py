@@ -155,7 +155,7 @@ def build_overview(database, repository, now=None):
         key=lambda item: (
             item["current"] is None,
             item["stale"],
-            item["state"] != "changed",
+            {"conflict": 0, "source_changed": 1, "changed": 2}.get(item["state"], 3),
             -abs(item["delta"] or 0) / item["threshold"]
             if item["state"] == "changed"
             else 0,
@@ -164,6 +164,7 @@ def build_overview(database, repository, now=None):
     )
     for workout in workouts:
         workout["title"] = (workout["title"] or workout["workout_type"])[:240]
+        workout["workout_type"] = workout["workout_type"][:120]
         workout["provider"] = workout["provider"][:120]
         workout["duration_seconds"] = (
             datetime.fromisoformat(workout["ended_at"])

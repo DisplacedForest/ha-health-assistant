@@ -59,6 +59,7 @@ def test_source_change_and_conflict_do_not_become_change(database, repository):
     assert result["current"]["provider"] == "new"
     assert result["state"] == "conflict"
     assert result["delta"] is None
+    assert build_overview(database, repository, NOW)["metrics"][0]["metric"] == "weight"
 
 
 def test_activity_compares_completed_local_days(database, repository):

@@ -147,6 +147,7 @@ Configuring Health Assistant adds a Health entry to the sidebar, no manual resou
 - **Overview**: leads with a change in your record, then keeps quieter metrics in compact rows. Each reading has a recent trend, its source and observation time. Metrics without data stay collapsed. The workout strip covers the last seven days.
 - **Trends**: weight, body fat, lean mass, steps, distance, and active energy over 7, 30, or 90 days, drawn as lightweight SVG charts.
 - Values display in your configured unit system; empty states point you at entity mapping and the manual actions.
+- Manual entry times use your browser's local timezone and are sent with an explicit offset-equivalent UTC timestamp.
 
 Data reaches the panel through a dedicated WebSocket API with bounded queries and server-side downsampling. The frontend never touches the database, and the backend never renders.
 
@@ -159,7 +160,7 @@ Comparisons have deliberately narrow meanings:
 - Missing comparison readings produce no delta. Chart lines break at source changes. Body fat differences are percentage points.
 - Body measurements older than 14 days and activity readings older than 36 hours are marked as older readings. These are display defaults, not recommendations about measurement frequency.
 
-Fresh changes sort ahead of quiet metrics when they reach 0.5 kg for weight or lean mass, 0.5 percentage points for body fat, 1,000 steps, 1 km, or 100 kcal. Larger changes relative to those thresholds come first; ties and quiet metrics use a stable metric order. Stale readings follow fresh ones. These thresholds organize the display and say nothing about medical significance.
+Source conflicts and source changes come first among fresh readings. Other fresh changes sort ahead of quiet metrics when they reach 0.5 kg for weight or lean mass, 0.5 percentage points for body fat, 1,000 steps, 1 km, or 100 kcal. Larger changes relative to those thresholds come first; ties and quiet metrics use a stable metric order. Stale readings follow fresh ones. These thresholds organize the display and say nothing about medical significance.
 
 The Overview carries at most 120 chart points per metric, eight recent workouts and 32 source statuses. Reading detail carries at most 50 claims and 25 nearby readings; history loads in pages of 20. Arbitrary provider metadata is not copied into the panel payload.
 

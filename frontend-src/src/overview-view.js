@@ -111,6 +111,7 @@ export function renderDetail(panel) {
 export const overviewStyles = css`
   :host { --health-line: var(--divider-color, #8885); --health-accent: var(--primary-color, #168c9e); }
   .page-subtitle { margin: 6px 0 0; color: var(--secondary-text-color); font-size: 14px; }
+  .header-identity { display: flex; align-items: center; gap: 16px; }
   .overview-actions { display: flex; gap: 8px; margin: 20px 0; flex-wrap: wrap; }
   .lead-change { display: grid; grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.1fr); gap: 40px; padding: 36px 0 40px; border-top: 1px solid var(--health-line); border-bottom: 1px solid var(--health-line); }
   .lead-copy h2 { font-size: 23px; margin: 12px 0; color: var(--primary-text-color); }

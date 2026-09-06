@@ -308,7 +308,7 @@ class HealthAssistantPanel extends LitElement {
     }
     const when = this._formValue("m-when");
     if (when) {
-      data.observed_at = when;
+      data.observed_at = new Date(when).toISOString();
     }
     await this._callAction("add_observation", data);
   }
@@ -322,7 +322,7 @@ class HealthAssistantPanel extends LitElement {
       this._error = "Workout type, start, and end are required";
       return;
     }
-    const data = { workout_type: workoutType, start, end };
+    const data = { workout_type: workoutType, start: new Date(start).toISOString(), end: new Date(end).toISOString() };
     const title = this._formValue("w-title");
     if (title) {
       data.title = title;
@@ -517,8 +517,7 @@ class HealthAssistantPanel extends LitElement {
     return html`
       <div class="wrapper">
         <header>
-          ${this.narrow ? html`<button aria-label="Open sidebar" @click=${() => this.dispatchEvent(new window.Event("hass-toggle-menu", { bubbles: true, composed: true }))}>Menu</button>` : nothing}
-          <div><h1>Health</h1><p class="page-subtitle">Your record, at a glance</p></div>
+          <div class="header-identity">${this.narrow ? html`<button aria-label="Open sidebar" @click=${() => this.dispatchEvent(new window.Event("hass-toggle-menu", { bubbles: true, composed: true }))}>Menu</button>` : nothing}<div><h1>Health</h1><p class="page-subtitle">Your record, at a glance</p></div></div>
           <nav aria-label="Health views">
             <button @click=${this._refresh} ?disabled=${this._loading}>${this._loading ? "Refreshing" : "Refresh"}</button>
             <button

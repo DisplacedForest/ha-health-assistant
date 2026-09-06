@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Manual measurement and workout forms now preserve the local time you entered when Home Assistant uses a different timezone.
+
 - A sensor mapped to more than one metric now updates all of them. Previously, only the last mapping was used. Existing mappings keep working without any setup changes.
 
 ### Added
