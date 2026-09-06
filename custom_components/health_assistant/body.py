@@ -33,15 +33,25 @@ def exercise_map():
     return data["regions"], aliases
 
 
+def _valid_text(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeError:
+        return False
+    return True
+
+
 def _text(value, limit):
-    return value[:limit] if isinstance(value, str) else ""
+    return value[:limit] if _valid_text(value) else ""
 
 
 def _set(raw):
     if not isinstance(raw, dict):
         return None
     kind = raw.get("type", "normal")
-    if not isinstance(kind, str) or not kind.strip() or len(kind) > 32:
+    if not _valid_text(kind) or not kind.strip() or len(kind) > 32:
         return None
     result = {"type": kind}
     for key in SET_FIELDS:
@@ -82,10 +92,12 @@ def _exercises(raw):
     exercises = []
     total_sets = 0
     for item in source[:MAX_EXERCISES]:
-        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+        if not isinstance(item, dict) or not _valid_text(item.get("name")):
             incomplete = True
             continue
         name = item["name"]
+        if item.get("notes") is not None and not _valid_text(item["notes"]):
+            incomplete = True
         incomplete |= len(name) > 200 or len(_text(item.get("notes"), 1001)) > 1000
         rows = item.get("sets", [])
         if not name.strip() or not isinstance(rows, list):

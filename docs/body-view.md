@@ -54,6 +54,9 @@ to 100 exercises, 100 sets per exercise and 1,000 sets in total. A saved detail
 payload over 256 KiB is left out of this view. Limited or invalid detail is
 marked incomplete; the stored workout is kept.
 
+Invalid text in an old exercise name, note or set type is left out of the view.
+The workout is marked incomplete, and its other usable detail stays available.
+
 The unmapped list shows up to 20 names along with the total number of unmapped
 exercise entries. Names and notes have display limits. Workout detail returns
 only source identity, times and supported exercise fields. Other saved
