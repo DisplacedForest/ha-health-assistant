@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The Health overview now leads with changes, keeps quieter readings compact, and shows recent workouts and source health. Open a metric to inspect its source claims or exclude and restore an incorrect reading. Comparisons explain missing history, older readings and source disagreements instead of presenting a bare number.
 
+- You can keep room temperature, humidity and CO2 history from existing sensors. Capture is optional, stays local, and records gaps when fresh reports are missing. Five-minute history is kept for 90 days, then hourly history for two years.
 - Choose a Hevy Tracker account to start keeping completed workouts and their exercise sets locally. Capture uses the latest workout exposed by the installed integration, survives restarts without duplicates, and needs no extra sign-in. History import and body-measurement export are not included.
 
 - Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
@@ -30,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Source reconciliation: every incoming record is kept as a source claim, and cross-provider reports of the same physical measurement merge into one canonical observation carrying both provenances. Ambiguous near-matches are flagged as possible duplicates instead of being merged silently, a preferred source can be recorded per metric, and reconciliation is replayable with no claim ever deleted. The database migrates to schema version 3.
 
 ### Changed
+
+- Home Assistant 2026.8.0 or later is now required. Environmental history adds schema 6. Back up before upgrading; returning to an older integration build requires its matching database backup.
 
 - Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.
 

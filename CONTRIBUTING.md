@@ -89,3 +89,9 @@ To add a provider, implement the contract and register it in the integration set
 ## Reporting bugs
 
 Use the bug report template and include your Home Assistant version, the integration version, and debug logs with anything sensitive removed.
+
+## Environmental capture
+
+The environmental accumulator and repository live in `store/environment.py`. They stay independent of Home Assistant. `environment.py` handles filtered state reports, timers and lifecycle; `environment_options.py` owns its options step. Writes and maintenance use the same `HealthDatabase` transaction boundary as health observations and backups.
+
+Environmental records use compact series tables, not scalar source claims. Tests cover report-based duration, gaps, partial flushes, immutable area revisions, retention, indexed queries, bounded registration and backup restore. A production storage fixture verifies the 160-byte retained-bucket and 4 KiB registered-stream budgets. Test report behavior on Home Assistant 2026.8.0 as well as the release host. Do not infer personal exposure from an area mapping or continuous sensor coverage from an unchanged state.

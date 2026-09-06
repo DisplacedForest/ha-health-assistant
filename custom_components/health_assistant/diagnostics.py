@@ -56,6 +56,19 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
         "file_exists": path.exists(),
         "file_size_bytes": path.stat().st_size if path.exists() else None,
         "journal_mode": str(journal_mode[0][0]) if journal_mode else None,
+        "environment": {
+            "stream_count": database.execute(
+                "SELECT COUNT(*) FROM environment_streams"
+            )[0][0],
+            "bucket_count": database.execute(
+                "SELECT COUNT(*) FROM environment_buckets"
+            )[0][0],
+            "maintenance": dict(
+                database.execute(
+                    "SELECT last_success_ms, duration_ms, rolled_up, deleted, failed FROM environment_maintenance WHERE id=1"
+                )[0]
+            ),
+        },
         "observation_counts": {
             str(row["metric"]): int(row["n"]) for row in observation_counts
         },
@@ -81,6 +94,7 @@ async def async_get_config_entry_diagnostics(
     database_facts = await hass.async_add_executor_job(
         _collect_database_facts, entry.runtime_data.database
     )
+    database_facts["environment"].update(entry.runtime_data.environment.diagnostics())
     return {
         "domain": DOMAIN,
         "version": str(integration.version),
