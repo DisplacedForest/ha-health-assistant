@@ -155,9 +155,7 @@ async def test_stop_waits_for_inflight_sync(hass, registry):
     assert not registry.status("slow").degraded
 
 
-async def test_polled_provider_syncs_on_interval(
-    hass, registry, short_interval, freezer
-):
+async def test_polled_provider_syncs_on_interval(hass, registry, short_interval):
     from homeassistant.util import dt as dt_util
     from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -167,13 +165,11 @@ async def test_polled_provider_syncs_on_interval(
     provider = SyntheticProvider(key="polled", poll_interval=short_interval, sync=sync)
     registry.register(provider)
     await registry.async_start()
-    freezer.tick(short_interval * 2)
-    async_fire_time_changed(hass, dt_util.utcnow())
+    async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 2)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert provider.sync_calls == [{}]
     await registry.async_stop()
-    freezer.tick(short_interval * 2)
-    async_fire_time_changed(hass, dt_util.utcnow())
+    async_fire_time_changed(hass, dt_util.utcnow() + short_interval * 4)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert provider.sync_calls == [{}]
 
