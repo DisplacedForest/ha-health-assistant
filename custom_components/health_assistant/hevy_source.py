@@ -136,7 +136,7 @@ def parse_workout(state: State, account: str, now: datetime) -> CandidateWorkout
         provenance["total_volume_kg_reps"] = converted_value(
             attrs["total_volume"], attrs.get("total_volume_unit"), "kg"
         )
-    if len(json.dumps(provenance, ensure_ascii=False).encode()) > MAX_PAYLOAD_BYTES:
+    if len(json.dumps(provenance, sort_keys=True).encode("utf-8")) > MAX_PAYLOAD_BYTES:
         raise invalid_workout()
     workout_id = attrs.get("workout_id")
     if workout_id is not None:

@@ -12,7 +12,11 @@ from custom_components.health_assistant.const import (
     CONF_MAPPINGS,
     DOMAIN,
 )
-from custom_components.health_assistant.hevy_source import discover_hevy, parse_workout
+from custom_components.health_assistant.hevy_source import (
+    MAX_PAYLOAD_BYTES,
+    discover_hevy,
+    parse_workout,
+)
 from custom_components.health_assistant.providers.contract import (
     ProviderCapabilityError,
     ProviderError,
@@ -189,6 +193,37 @@ def test_payload_limits_are_enforced(shape):
         data["exercise_count"] = 100
     with pytest.raises(ProviderError):
         parse_workout(State("sensor.summary", "Leg day", data), "account", NOW)
+
+
+async def test_unicode_payload_bound_matches_persisted_bytes(hass, config_entry):
+    data = attributes()
+    data["exercises"][0]["notes"] = "界" * 1000
+    data["exercises"] *= 40
+    data["exercise_count"] = 40
+    source, entity = hevy_source(hass, payload=data)
+    await setup_health(hass, config_entry)
+    await select_hevy(hass, config_entry, source)
+    await hass.async_block_till_done()
+    before = await workout_rows(hass, config_entry)
+    assert len(before) == 1
+    assert before[0].provenance["exercises"][0]["notes"] == "界" * 1000
+    database = config_entry.runtime_data.database
+    stored = await hass.async_add_executor_job(
+        database.execute,
+        "SELECT length(CAST(provenance AS BLOB)) AS size FROM workouts",
+    )
+    assert 240000 < stored[0]["size"] <= MAX_PAYLOAD_BYTES
+    data["exercises"] = data["exercises"][:1] * 50
+    data["exercise_count"] = 50
+    hass.states.async_set(entity.entity_id, "Leg day", data)
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.registry.status("hevy").degraded
+    assert await workout_rows(hass, config_entry) == before
+    unchanged = await hass.async_add_executor_job(
+        database.execute,
+        "SELECT length(CAST(provenance AS BLOB)) AS size FROM workouts",
+    )
+    assert unchanged[0]["size"] == stored[0]["size"]
 
 
 async def test_absent_source_and_drafts_do_not_offer_hevy(hass, config_entry):
