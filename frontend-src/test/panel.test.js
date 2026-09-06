@@ -13,7 +13,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function fixture() {
+function fixture(storage = new Map()) {
   let Panel;
   vm.runInNewContext(source, {
     LitElement: class {},
@@ -22,6 +22,8 @@ function fixture() {
     svg: () => "",
     nothing: undefined,
     overviewStyles: "",
+    bodyStyles: "",
+    window: { localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) } },
     customElements: { get: () => undefined, define: (_, constructor) => { Panel = constructor; } },
   });
   const panel = new Panel();
@@ -42,6 +44,7 @@ function fixture() {
   let refreshes = 0;
   panel._refresh = async () => { refreshes++; };
   panel.hass = {
+    user: { id: "test-user" },
     callWS: async (message) => {
       if (message.type.endsWith("/observation_exclusion")) return mutation.promise;
       if (message.type.endsWith("/observations")) return { observations: [readings[message.metric]] };
@@ -130,3 +133,43 @@ test("a current dialog shows a failed mutation and restores action focus", async
   assert.deepEqual(focus, [1]);
   assert.equal(panel._busyId, undefined);
 });
+
+test("Body is opt-in and an explicit view preference survives a new panel", () => {
+  const storage = new Map();
+  const first = fixture(storage).panel;
+  assert.equal(first._tab, "overview");
+  first._setTab("body");
+  const next = fixture(storage).panel;
+  next.updated(new Set(["hass"]));
+  assert.equal(next._tab, "body");
+  const otherUser = fixture(storage).panel;
+  otherUser.hass.user.id = "someone-else";
+  otherUser.updated(new Set(["hass"]));
+  assert.equal(otherUser._tab, "overview");
+});
+
+for (const outcome of ["success", "failure"]) {
+  test(`a delayed workout ${outcome} cannot alter a newly opened metric dialog`, async () => {
+    const { panel, focus } = fixture();
+    const response = deferred();
+    const requested = deferred();
+    const original = panel.hass.callWS;
+    panel.hass.callWS = (message) => {
+      if (message.type.endsWith("/workout_detail")) { requested.resolve(); return response.promise; }
+      return original(message);
+    };
+    const pending = panel._openWorkout(8);
+    await requested.promise;
+    panel._closeDetail();
+    await panel._openDetail("steps");
+    if (outcome === "success") response.resolve({ title: "Old workout" });
+    else response.reject(new Error("Disconnected"));
+    await pending;
+    assert.equal(panel._detailMetric, "steps");
+    assert.equal(panel._bodyRegion, undefined);
+    assert.equal(panel._workoutDetail, undefined);
+    assert.equal(panel._workoutError, undefined);
+    assert.equal(panel._detail.observation.id, 2);
+    assert.deepEqual(focus, []);
+  });
+}

@@ -1,5 +1,6 @@
 import { LitElement, html, css, svg, nothing } from "lit";
 import { renderOverview, renderDetail, overviewStyles } from "./overview-view.js";
+import { renderBody, renderBodyDetail, bodyStyles } from "./body-view.js";
 
 const KG_TO_LB = 2.204622621848776;
 const M_TO_MI = 1 / 1609.344;
@@ -29,6 +30,14 @@ class HealthAssistantPanel extends LitElement {
     narrow: { type: Boolean },
     panel: { attribute: false },
     _overview: { state: true },
+    _body: { state: true },
+    _bodyError: { state: true },
+    _bodySide: { state: true },
+    _bodyRegion: { state: true },
+    _workoutId: { state: true },
+    _workoutDetail: { state: true },
+    _workoutLoading: { state: true },
+    _workoutError: { state: true },
     _loading: { state: true },
     _detailMetric: { state: true },
     _detail: { state: true },
@@ -59,6 +68,9 @@ class HealthAssistantPanel extends LitElement {
     this._request = 0;
     this._detailRequest = 0;
     this._dialogSession = 0;
+    this._bodySide = "front";
+    this._bodyRequest = 0;
+    this._workoutRequest = 0;
   }
 
   get _domain() {
@@ -77,6 +89,10 @@ class HealthAssistantPanel extends LitElement {
   updated(changed) {
     if (changed.has("hass") && this.hass && !this._loadedOnce) {
       this._loadedOnce = true;
+      try {
+        const saved = window.localStorage.getItem(this._viewPreferenceKey);
+        if (["overview", "body", "trends"].includes(saved)) this._tab = saved;
+      } catch {}
       this._refresh();
     }
   }
@@ -101,6 +117,7 @@ class HealthAssistantPanel extends LitElement {
       const overview = await this.hass.callWS({ type: `${this._domain}/overview` });
       if (request === this._request) this._overview = overview;
       if (this._tab === "trends") await this._loadSeries();
+      if (this._tab === "body") await this._loadBody();
     } catch {
       if (request === this._request) this._error = "Health data could not refresh. Check the integration and try again.";
     } finally {
@@ -118,22 +135,29 @@ class HealthAssistantPanel extends LitElement {
 
   async _openDetail(metric, event) {
     const session = ++this._dialogSession;
-    this._opener = event?.currentTarget;
+    this._detailRequest++;
+    this._workoutRequest++;
+    if (!this.shadowRoot.querySelector("dialog")?.open) this._opener = event?.currentTarget;
+    this._bodyRegion = undefined;
     this._detailMetric = metric;
     this._detail = undefined;
     this._showExcluded = false;
     this._records = [];
     await this.updateComplete;
     if (session !== this._dialogSession) return;
-    this.shadowRoot.querySelector("dialog").showModal();
+    const dialog = this.shadowRoot.querySelector("dialog");
+    if (!dialog.open) dialog.showModal();
     await this._loadDetail();
   }
 
   _closeDetail() {
     this._dialogSession++;
     this._detailRequest++;
+    this._workoutRequest++;
     this.shadowRoot.querySelector("dialog")?.close();
     this._detailMetric = undefined;
+    this._bodyRegion = undefined;
+    this._workoutId = undefined;
     this._opener?.focus();
   }
 
@@ -203,8 +227,66 @@ class HealthAssistantPanel extends LitElement {
     }
   }
 
+  get _viewPreferenceKey() {
+    return `${this._domain}:${this.hass?.user?.id || "local"}:view`;
+  }
+
+  async _loadBody() {
+    const request = ++this._bodyRequest;
+    this._bodyError = undefined;
+    try {
+      const body = await this.hass.callWS({ type: `${this._domain}/body` });
+      if (request === this._bodyRequest) this._body = body;
+    } catch {
+      if (request === this._bodyRequest) this._bodyError = "Body data could not refresh. Try again.";
+    }
+  }
+
+  async _openRegion(key, event) {
+    const session = ++this._dialogSession;
+    this._detailRequest++;
+    this._workoutRequest++;
+    if (!this.shadowRoot.querySelector("dialog")?.open) this._opener = event?.currentTarget;
+    this._detailMetric = undefined;
+    this._bodyRegion = key;
+    this._workoutId = undefined;
+    this._workoutDetail = undefined;
+    this._workoutError = undefined;
+    await this.updateComplete;
+    if (session !== this._dialogSession) return;
+    const dialog = this.shadowRoot.querySelector("dialog");
+    if (!dialog.open) dialog.showModal();
+    return session;
+  }
+
+  async _openWorkout(id, event) {
+    const session = await this._openRegion("workout", event);
+    if (session !== this._dialogSession) return;
+    await this._loadWorkout(id);
+  }
+
+  async _loadWorkout(id) {
+    const request = ++this._workoutRequest;
+    const session = this._dialogSession;
+    this._workoutId = id;
+    this._workoutDetail = undefined;
+    this._workoutLoading = true;
+    this._workoutError = undefined;
+    try {
+      const detail = await this.hass.callWS({ type: `${this._domain}/workout_detail`, workout_id: id });
+      if (request === this._workoutRequest && session === this._dialogSession) this._workoutDetail = detail;
+    } catch {
+      if (request === this._workoutRequest && session === this._dialogSession) this._workoutError = "That workout could not load. Try again.";
+    } finally {
+      if (request === this._workoutRequest && session === this._dialogSession) this._workoutLoading = false;
+    }
+  }
+
   _setTab(tab) {
     this._tab = tab;
+    try {
+      window.localStorage.setItem(this._viewPreferenceKey, tab);
+    } catch {}
     if (tab === "trends") {
       this._loadSeries();
     } else {
@@ -532,12 +614,21 @@ class HealthAssistantPanel extends LitElement {
             <button @click=${this._refresh} ?disabled=${this._loading}>${this._loading ? "Refreshing" : "Refresh"}</button>
             <button
               class=${this._tab === "overview" ? "active" : ""}
+              aria-pressed=${this._tab === "overview"}
               @click=${() => this._setTab("overview")}
             >
               Overview
             </button>
             <button
+              class=${this._tab === "body" ? "active" : ""}
+              aria-pressed=${this._tab === "body"}
+              @click=${() => this._setTab("body")}
+            >
+              Body (experimental)
+            </button>
+            <button
               class=${this._tab === "trends" ? "active" : ""}
+              aria-pressed=${this._tab === "trends"}
               @click=${() => this._setTab("trends")}
             >
               Trends
@@ -547,13 +638,13 @@ class HealthAssistantPanel extends LitElement {
         ${this._error
           ? html`<div class="card error">${this._error}</div>`
           : nothing}
-        ${this._tab === "overview" ? this._renderOverview() : this._renderTrends()}
-        ${renderDetail(this)}
+        ${this._tab === "overview" ? this._renderOverview() : this._tab === "body" ? renderBody(this) : this._renderTrends()}
+        ${this._bodyRegion ? renderBodyDetail(this) : renderDetail(this)}
       </div>
     `;
   }
 
-  static styles = [overviewStyles, css`
+  static styles = [overviewStyles, bodyStyles, css`
     :host {
       display: block;
       height: 100%;
