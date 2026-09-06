@@ -72,7 +72,7 @@ async def test_diagnostics_allowlist_shape(hass, config_entry):
         "providers",
     }
     assert diagnostics["domain"] == DOMAIN
-    assert diagnostics["version"] == "0.1.0"
+    assert diagnostics["version"] == "0.2.0"
     assert diagnostics["database"]["schema_version"] == SCHEMA_VERSION
     assert diagnostics["database"]["supported_schema_version"] == SCHEMA_VERSION
     assert diagnostics["database"]["file_exists"] is True

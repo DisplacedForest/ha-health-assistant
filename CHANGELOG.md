@@ -7,40 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Manual measurement and workout forms now preserve the local time you entered when Home Assistant uses a different timezone.
-
-- A sensor mapped to more than one metric now updates all of them. Previously, only the last mapping was used. Existing mappings keep working without any setup changes.
+## [0.2.0] - 2026-09-06
 
 ### Added
 
-- Export health history to a portable archive and import it into another installation. Preview changes first, keep exclusions and source details, and retry interrupted imports without duplicating records. Environmental history and stored workout sets are included.
-
-- Body is a new experimental view of your recorded week. Flip between front and back, open a muscle region for its workouts, and inspect body measurements through the same source details as Overview. Color follows recent recorded sets; unknown exercise names and missing detail are shown explicitly.
-
-- The Health overview now leads with changes, keeps quieter readings compact, and shows recent workouts and source health. Open a metric to inspect its source claims or exclude and restore an incorrect reading. Comparisons explain missing history, older readings and source disagreements instead of presenting a bare number.
-
-- You can keep room temperature, humidity and CO2 history from existing sensors. Capture is optional, stays local, and records gaps when fresh reports are missing. Five-minute history is kept for 90 days, then hourly history for two years.
-- Choose a Hevy Tracker account to start keeping completed workouts and their exercise sets locally. Capture uses the latest workout exposed by the installed integration, survives restarts without duplicates, and needs no extra sign-in. History import and body-measurement export are not included.
-
-- Setup can find your Withings and Fitbit sensors. Choose an account for each metric without picking entity IDs, see which sensors need attention, and keep manual mappings for everything else. Source choices use the same priority order as the rest of Health Assistant.
-
-- Incorrect readings can be excluded from current values and charts, then restored. Their source history is kept, and replaying the same records does not reactivate them. The database moves to schema 5; older builds cannot open it.
-
-- Diagnostics now show which sources are working, what they can import or export, and when an operation last succeeded. Error details stay out of the download to avoid exposing health data.
-
-- Cross-source conflict resolution: a configurable per-metric source priority order decides the canonical current value when sources disagree, semantic duplicate matching adds a per-metric value tolerance to the merge windows, and one resolution rule serves sensors, the panel, and store queries alike. Reordering priority re-resolves from retained claims with no data loss. The database migrates to schema version 4. Multi-source installs may see contested current values shift once when priority defaults first apply.
-
-- Source reconciliation: every incoming record is kept as a source claim, and cross-provider reports of the same physical measurement merge into one canonical observation carrying both provenances. Ambiguous near-matches are flagged as possible duplicates instead of being merged silently, a preferred source can be recorded per metric, and reconciliation is replayable with no claim ever deleted. The database migrates to schema version 3.
+- The Health panel now opens with changes in your record, recent workouts and source health. Open a metric to see its readings, compare sources, or exclude an incorrect reading. Missing history, older readings and disagreements get an explanation instead of a misleading comparison.
+- Setup can find Withings and Fitbit accounts and map their supported metrics. Manual sensor mapping is still available. You choose which sources belong to the person in this history.
+- Hevy Tracker can supply completed workouts and their available exercise sets without another sign-in. Capture starts with its latest exposed workout and builds history from there; it doesn't fetch your full Hevy history.
+- Body is an experimental second view. Flip the figure front to back and open a muscle region to see its recorded sets. Color fades over seven days. Unknown exercises and missing detail stay visible, and the figure never changes shape from your measurements.
+- Optional room history captures temperature, humidity and CO2 from existing sensors. Missing reports leave gaps. Five-minute records are kept for 90 days, followed by hourly records up to two years old. Environmental charts and personal exposure estimates aren't included.
+- Export and import portable history archives, including source claims, exclusions, workout detail and environmental records. Imports preview changes by default, preserve existing exclusions and can be retried after an interruption. Database backups remain the way to restore an exact earlier state.
+- Diagnostics show source capabilities, degraded status and the last successful operation. Health values, workout titles and raw provider errors stay out of the download.
 
 ### Changed
 
-- Compatibility checks now run against Home Assistant 2026.8.0 and 2026.9.1, each with its matching frontend. The minimum supported version remains 2026.8.0.
+- Reports of the same measurement can share one canonical reading while retaining each source's evidence. Per-metric priorities decide which source supplies a contested value. Changing priorities keeps the underlying claims.
+- Incorrect readings can be excluded from current values and charts, then restored. Replaying the same source records doesn't bring an excluded reading back. Exclusion keeps history; it isn't permanent erasure.
+- Home Assistant 2026.8.0 or later is required. Tests cover 2026.8.0 and 2026.9.1 with their matching frontends.
+- The database upgrades from schema 1 to schema 6, preserving existing history and adding source claims, priorities, exclusion state and environmental storage. Back up before upgrading. Older integration builds can't open schema 6; rolling back requires a matching older database backup. Multi-source installations may see a different current value when priorities first apply.
 
-- Home Assistant 2026.8.0 or later is now required. Environmental history adds schema 6. Back up before upgrading; returning to an older integration build requires its matching database backup.
+### Fixed
 
-- Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.
+- A sensor mapped to several metrics now updates all of them.
+- Manual measurement and workout forms preserve the local time you entered when Home Assistant uses a different timezone.
+- Malformed text in old workout detail no longer breaks the Body view. The affected detail is marked incomplete and the stored record is kept.
 
 ## [0.1.0] - 2026-08-21
 

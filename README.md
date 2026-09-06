@@ -8,24 +8,17 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.8+-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/o7triud67l)
 
-A local-first personal health platform for Home Assistant.
+Health Assistant keeps body measurements, daily activity counters and workouts in a local SQLite history, with a dedicated Health panel in Home Assistant. It reads existing sensors and supported integrations, normalizes units, and keeps the source records behind each reading.
 
-Health Assistant normalizes health data from the sources you already have (HA sensors, smart scales, Apple Health and Health Connect bridges, fitness services, workout integrations) into a canonical local health store. It then exposes useful entities, events, automations, trends, and a dedicated Health panel in the sidebar.
-
-> **Status: early.** 0.1.x installs manually or as a custom HACS repository. Publication to the HACS default store is planned for 0.2.0 or later.
-
----
+**0.2.0 requires Home Assistant 2026.8.0 or later.** Install it manually or as a custom HACS repository. It isn't in the HACS default store yet.
 
 ## Why
 
-Home Assistant already sees a surprising amount of your health data: a smart scale here, a workout integration there, maybe a sleep sensor or a HealthKit bridge. But that data lives scattered across entities, gets truncated by Recorder retention, uses inconsistent units, and has no notion of "this weight reading and that weight reading are the same measurement from two sources."
+A scale and a fitness service can report the same weigh-in with different units or slightly different times. Recorder keeps sensor states, but it doesn't decide whether those reports describe one measurement. Health Assistant keeps both source claims, reconciles matching reports and lets you inspect disagreements.
 
-Health Assistant treats health as a first-class domain:
+The health database has its own lifecycle, separate from Recorder retention. Removing an integration or renaming a sensor doesn't erase its recorded history. Summary sensors work with normal Home Assistant automations; the Health panel provides trends, source detail and correction controls.
 
-- **Local-first canonical storage.** Your health history lives in a local store owned by the integration. Home Assistant Recorder is not the source of truth, so your data outlives entity renames and retention windows.
-- **Provider-agnostic model.** Every observation carries provenance. Data from different sources gets normalized units, deduplication, and support for corrections.
-- **A real health UX.** Longitudinal health analytics don't fit well into Lovelace cards, so Health Assistant ships a dedicated Health panel.
-- **HA-native automations.** Health transitions and environmental context become events and triggers you can automate on.
+This release records weight, body fat, lean mass, steps, distance, active energy and workouts. It also offers optional room temperature, humidity and CO2 history. Sleep, recovery metrics, custom health events and environmental correlations are still future work. Use one person's sources per installation; multi-person attribution isn't available yet.
 
 ## Incorrect readings
 
@@ -44,13 +37,13 @@ Privacy by default. Health Assistant has no cloud component and requires no exte
 What is stored, and where:
 
 - All health data lives in a single SQLite database at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory.
-- Each record holds the metric, value, unit, timestamp, person identifier, and provenance (which sensor or action produced it). Workouts additionally hold type, optional title, start, end, energy, and distance. Since schema version 3 the database also keeps a source-claims table (the per-provider evidence behind each canonical observation) and a per-metric preferred-source table; both live in the same local file.
+- Each record holds the metric, value, unit, timestamp, person identifier, and provenance (which sensor or action produced it). Workouts additionally hold type, optional title, start, end, energy, and distance. Source claims, priorities, exclusions, workout exercise detail and environmental history live in that same file.
 - Backups you create land beside it under `.storage/health_assistant/backups/`.
 - Your entity-to-metric mappings live in the config entry options, in HA's normal storage.
 
 What Health Assistant never does:
 
-- It never sends your health data anywhere. There are no outbound connections, no telemetry, no analytics. Data only leaves your instance if you explicitly connect a future provider that syncs with an outside service, and even then the canonical store stays local.
+- Health Assistant makes no outbound connections and has no telemetry. Your installed source integrations may communicate with their vendors under their own settings. Exports and backups stay on your disk until you move or share them.
 - Diagnostics downloads include record counts, schema version, provider keys and capabilities, mapping counts, and database health. Provider status includes whether it is degraded and when an operation last succeeded. That timestamp is not the time of the latest measurement. Status starts fresh when the integration reloads. A previous failure appears as `provider_error`, even after recovery; the degraded flag tells you whether the provider has recovered. Raw errors, measurements, workout titles, provider cursors, and provenance payloads are excluded.
 - Uninstalling the integration never deletes your database.
 
@@ -60,7 +53,7 @@ When more than one source reports the same metric, one documented rule decides t
 
 - Each metric has a source priority order. It starts from sensible defaults (sources are added to the order as they register, in setup order) and you can reorder it; the order lives in the local database alongside your data.
 - Two providers reporting the same physical measurement (inside a per-metric time window and value tolerance: for body measurements, 2 minutes and 0.5 kg or 1 percent, whichever is looser) collapse into one canonical observation that keeps both provenances. The highest-priority source supplies the value.
-- Readings inside the time window but outside the value tolerance are genuinely different: both records stay, both are flagged as possible duplicates, and the current value comes from the highest-priority source among the records contesting the newest timestamp. Ties break by newest observation, then stable record id.
+- Readings inside the time window but outside the value tolerance remain separate: both records stay, both are flagged as possible duplicates, and the current value comes from the highest-priority source among the records contesting the newest timestamp. Ties break by newest observation, then stable record id.
 - Outside the contested window, normal time-series behavior applies: the newest observation is the current value regardless of priority.
 - Reordering priority never deletes anything. Alternate claims are retained and the canonical values re-derive from them.
 
@@ -80,13 +73,13 @@ Core concepts:
 - **Canonical store**: a local SQLite database holding normalized health observations. It lives at `.storage/health_assistant/health.sqlite` inside your Home Assistant config directory, owned entirely by the integration: Recorder never stores it, and unloading or removing the integration never deletes it.
 - **Observations**: typed records (body measurements, activity, workouts, and later sleep and recovery) with units, timestamps, and provenance.
 - **Source claims and reconciliation**: every incoming record is kept as a source claim, and canonical observations are derived from claims. When two providers report the same physical measurement close together in time (a weigh-in arriving both from the scale integration and a health platform bridge), the claims merge under one canonical observation carrying both provenances; the merge windows are conservative, per metric class, and same-provider records never merge. Near-misses that fall inside a wider suspicious window are never merged silently: both records stay separate and carry a possible-duplicate flag you can see in the panel data. No claim is ever deleted by reconciliation, so the process is replayable.
-- **Providers**: adapters that ingest from or export to a source (HA entities, manual entry services, and later Hevy, smart scales, and health platform bridges).
-- **Entities and events**: summary sensors and automation triggers derived from the store, never the store itself.
+- **Providers**: adapters for manual actions, mapped HA sensors, curated Withings and Fitbit sensors, and Hevy workout summaries. The provider contract is internal.
+- **Entities**: summary sensors derived from the store. Custom health events and triggers are not part of this release.
 
 ## Roadmap
 
 - **0.1.0 Foundation**: canonical store, body/activity/workout observations, HA sensor and manual ingestion, basic entities, first Health panel.
-- **0.2.0 Providers & Sync**: provider framework, Hevy and smart-scale paths, deduplication and provenance management, import/export.
+- **0.2.0 Sources & History**: source setup, Hevy capture, reconciliation, exclusions, portable history, room capture, Overview and experimental Body.
 - **0.3.0 Sleep & Recovery**: sleep sessions, resting HR, HRV, recovery metrics, Apple Health and Health Connect bridge support.
 - **0.4.0 Trends & Context**: longitudinal charts, environmental correlations, comparisons, health timeline.
 - **0.5.0 Automation & Platform**: health events, richer automation primitives, provider capability contracts.
@@ -106,7 +99,7 @@ Five-minute records are kept for 90 days, then combined into hourly records unti
 
 Twelve continuously recorded streams budget about 79.31 MB after two years, plus fixed database overhead and maintenance delay. Area changes create additional stream revisions, so the number of active sensors alone does not describe storage use. The registry holds at most 256 active or historical streams; setup reports an error at that limit. SQLite reuses deleted pages, so the file may keep its previous size. Backups need additional space.
 
-Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups include the complete environmental history, coverage, area metadata and maintenance state. Restore the database as a whole using the procedure below. Portable interchange must include these tables and their metadata; exporting only scalar observations is not a complete history backup.
+Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups and portable history archives include retained environmental records, coverage and area metadata. A database backup restores the whole store; a portable import merges its history.
 
 This build moves the database to schema 6. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
 
@@ -219,7 +212,7 @@ Each measurement sensor carries `observed_at`, `provider`, and `source` attribut
 
 ## Installation
 
-Health Assistant is not in the HACS default store yet; that's planned for 0.2.0 or later, after the provider framework lands. For 0.1.x, install it one of two ways.
+Use Home Assistant 2026.8.0 or later. Health Assistant is available as a custom HACS repository or a manual install. Default-store inclusion still needs the Home Assistant branding requirement and external review.
 
 **As a custom HACS repository (recommended):**
 
@@ -262,13 +255,19 @@ Imports include source priorities and can change which source supplies a current
 
 The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams and retained buckets. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
 
-See the [archive format and merge rules](docs/interchange-format.md) for fields, limits and recovery details. Use a SQLite or Home Assistant backup below when you need a whole-instance restore.
+See the [archive format and merge rules](docs/interchange-format.md) for fields, limits and recovery details. Use a SQLite backup below to restore the health store exactly, or a Home Assistant backup to restore the configuration as well.
+
+## Upgrading from 0.1
+
+Create a database backup before installing 0.2.0, and upgrade Home Assistant first if it is older than 2026.8.0. Install the new integration files and restart Home Assistant. Existing readings, workouts and manual mappings are retained; the database migrates to schema 6 on setup. Open Health Assistant's Configure dialog to choose any new sources or room sensors.
+
+An older integration build cannot read the upgraded database. To roll back, stop Home Assistant, restore the older integration files and their matching database backup, then start it again. Replacing only the integration files is not a rollback.
 
 ## Backup and restore
 
-Your health history deserves disaster recovery from day one, so 0.1 ships both paths.
+Keep a database backup before upgrading, importing history or changing an existing store.
 
-**Home Assistant backups** already cover you: the database lives in `.storage`, and Health Assistant checkpoints it when a native HA backup starts, so full and partial backups contain a consistent copy.
+**Home Assistant backups** that include your Home Assistant configuration include the database under `.storage`. Health Assistant checkpoints it when a native backup starts.
 
 **On-demand backups** come from the `health_assistant.create_backup` action. It uses SQLite's online backup API, so the copy is consistent even while data is being ingested, and writes a timestamped file under `.storage/health_assistant/backups/`. Call it from Developer tools, an automation, or a schedule. The action returns the path it wrote.
 
