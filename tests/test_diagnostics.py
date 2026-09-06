@@ -1,9 +1,15 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from custom_components.health_assistant.const import DOMAIN
 from custom_components.health_assistant.diagnostics import (
     async_get_config_entry_diagnostics,
+)
+from custom_components.health_assistant.providers import (
+    HealthProvider,
+    ProviderCapabilities,
 )
 from custom_components.health_assistant.store import (
     DEFAULT_PERSON_ID,
@@ -63,6 +69,7 @@ async def test_diagnostics_allowlist_shape(hass, config_entry):
         "entry_state",
         "mapped_entity_counts",
         "database",
+        "providers",
     }
     assert diagnostics["domain"] == DOMAIN
     assert diagnostics["version"] == "0.1.0"
@@ -123,3 +130,78 @@ async def test_diagnostics_never_contain_health_values(hass, config_entry):
     assert "bathroom scale" not in payload
     assert "reading-1" not in payload
     assert "workout-1" not in payload
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "82.5 kg, Sunrise Intervals, bathroom scale, reading-1",
+        "https://provider.example/?token=private-token password=private-password",
+        "",
+    ],
+)
+async def test_provider_diagnostics_redact_failure_and_recovery(
+    hass, config_entry, freezer, message
+):
+    class FailingProvider(HealthProvider):
+        key = "failing"
+        display_name = "Private profile name"
+        capabilities = ProviderCapabilities(
+            metrics=frozenset({MetricType.WEIGHT, MetricType.BODY_FAT_PERCENTAGE}),
+            workouts=True,
+            can_export=True,
+        )
+        fail = True
+
+        async def async_sync(self, sink, state):
+            if self.fail:
+                raise RuntimeError(message)
+            return {"private_cursor": "private-state"}
+
+    config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    registry = config_entry.runtime_data.registry
+    provider = FailingProvider()
+    registry.register(provider)
+
+    fresh = await async_get_config_entry_diagnostics(hass, config_entry)
+    assert set(fresh["providers"]) == {"ha_entity", "manual", "failing"}
+    expected = {
+        "capabilities": {
+            "metrics": ["body_fat_percentage", "weight"],
+            "workouts": True,
+            "can_import": True,
+            "can_export": True,
+        },
+        "degraded": False,
+        "last_success": None,
+        "last_error": None,
+    }
+    assert fresh["providers"]["failing"] == expected
+
+    await registry.async_sync("failing")
+    failed = await async_get_config_entry_diagnostics(hass, config_entry)
+    expected.update(degraded=True, last_error="provider_error")
+    assert failed["providers"]["failing"] == expected
+
+    freezer.move_to(OBSERVED)
+    provider.fail = False
+    await registry.async_sync("failing")
+    recovered = await async_get_config_entry_diagnostics(hass, config_entry)
+    expected.update(degraded=False, last_success=OBSERVED.isoformat())
+    assert recovered["providers"]["failing"] == expected
+    payload = json.dumps([fresh, failed, recovered])
+    for secret in (
+        "82.5",
+        "Sunrise Intervals",
+        "bathroom scale",
+        "reading-1",
+        "provider.example",
+        "private-token",
+        "private-password",
+        "Private profile name",
+        "private_cursor",
+        "private-state",
+    ):
+        assert secret not in payload
