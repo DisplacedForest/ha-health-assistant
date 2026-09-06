@@ -1,4 +1,5 @@
 import { html, svg, css, nothing } from "lit";
+import { renderDialog } from "./detail-dialog.js";
 
 function sparkline(metric, large = false) {
   const points = metric.points;
@@ -28,7 +29,7 @@ function sparkline(metric, large = false) {
   </svg>`;
 }
 
-function changeText(panel, metric) {
+export function changeText(panel, metric) {
   if (metric.state === "source_changed") return "Source changed. Compare with care.";
   if (metric.state === "conflict") return "Sources disagree. Review readings.";
   if (metric.delta === null) return "More history needed for a comparison";
@@ -88,8 +89,7 @@ export function renderDetail(panel) {
   const metric = panel._overview?.metrics.find((item) => item.metric === panel._detailMetric);
   const detail = panel._detail;
   const reading = detail?.observation;
-  return html`<dialog aria-labelledby="detail-title" @cancel=${() => panel._closeDetail()}>
-    <div class="detail-header"><div><p class="eyebrow">Readings and sources</p><h2 id="detail-title">${panel._label(panel._detailMetric)}</h2></div><button autofocus @click=${() => panel._closeDetail()}>Close</button></div>
+  return renderDialog(panel, panel._label(panel._detailMetric), "Readings and sources", html`
     ${panel._detailError ? html`<p class="error" role="alert">${panel._detailError}<button @click=${() => panel._loadDetail()}>Try again</button></p>` : nothing}
     ${metric ? html`<div class="detail-trend">${sparkline(metric, true)}<p class="sub">${changeText(panel, metric)}${metric.delta !== null ? ` · ${metric.comparison_label}` : ""}</p></div>` : nothing}
     ${panel._detailLoading ? html`<p role="status">Loading readings…</p>` : nothing}
@@ -105,7 +105,7 @@ export function renderDetail(panel) {
     <section class="record-history"><div class="section-heading"><h3>Browse readings</h3><label class="excluded-toggle"><input type="checkbox" .checked=${panel._showExcluded} @change=${(event) => {panel._showExcluded = event.target.checked; panel._detail = undefined; panel._loadDetail();}} /> Excluded only</label></div><p class="sub">Most recently added first</p>
     ${panel._records.map((record) => html`<button class="record-button ${reading?.id === record.id ? "selected" : ""}" ?disabled=${panel._detailLoading} @click=${() => panel._loadDetail(record.id)}><span>${new Date(record.observed_at).toLocaleString()}<span class="metric-source">${panel._providerName(record.provider)}</span></span><span>${panel._metricValue(record)}</span></button>`)}
     ${panel._nextRecord ? html`<button ?disabled=${panel._detailLoading} @click=${() => panel._loadDetail(reading?.id, true)}>Load older readings</button>` : nothing}</section>
-  </dialog>`;
+  `);
 }
 
 export const overviewStyles = css`

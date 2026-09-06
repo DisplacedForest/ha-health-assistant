@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Body is a new experimental view of your recorded week. Flip between front and back, open a muscle region for its workouts, and inspect body measurements through the same source details as Overview. Color follows recent recorded sets; unknown exercise names and missing detail are shown explicitly.
+
 - The Health overview now leads with changes, keeps quieter readings compact, and shows recent workouts and source health. Open a metric to inspect its source claims or exclude and restore an incorrect reading. Comparisons explain missing history, older readings and source disagreements instead of presenting a bare number.
 
 - You can keep room temperature, humidity and CO2 history from existing sensors. Capture is optional, stays local, and records gaps when fresh reports are missing. Five-minute history is kept for 90 days, then hourly history for two years.
