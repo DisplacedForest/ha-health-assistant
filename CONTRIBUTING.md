@@ -4,12 +4,12 @@ Thanks for wanting to help. Health Assistant is early, so the fastest way to con
 
 ## Setup
 
-You need Python 3.13+ and [mise](https://mise.jdx.dev/).
+You need Python 3.14.2 or newer within Python 3.14, Node.js 22, and [mise](https://mise.jdx.dev/).
 
 ```bash
 git clone https://github.com/DisplacedForest/ha-health-assistant.git
 cd ha-health-assistant
-python -m venv .venv
+python3.14 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-test.txt
 ```
@@ -23,7 +23,20 @@ mise run check      # format, lint, test
 mise run ci         # exactly what GitHub Actions runs
 ```
 
-Everything must be green before you push.
+Everything must be green before you push. These commands check the currently activated environment. The default requirements test Home Assistant 2026.9.1 with its matching frontend. CI also tests the minimum supported Home Assistant 2026.8.0 in a separate environment, and the required Test check passes only when both jobs pass.
+
+For changes to Home Assistant APIs or dependencies, run both commands again in a minimum-version environment:
+
+```bash
+deactivate
+python3.14 -m venv .venv/minimum
+source .venv/minimum/bin/activate
+pip install -r requirements-test-minimum.txt
+mise run check
+mise run ci
+```
+
+Keep each test harness paired with the frontend version required by that Home Assistant release. The shared requirements-test-common.txt file pins the tools used by both environments. Dependabot groups the default core harness and frontend updates and leaves the minimum requirements alone. Review their exact version pairing before merging. Do not replace the minimum environment with a newer core version when updating the default dependencies.
 
 ## Local Home Assistant instance
 

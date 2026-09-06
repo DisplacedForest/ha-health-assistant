@@ -8,6 +8,13 @@ updates:
       default-days: 7
   - package-ecosystem: "pip"
     directory: "/"
+    exclude-paths:
+      - "requirements-test-minimum.txt"
+    groups:
+      home-assistant-test:
+        patterns:
+          - "home-assistant-frontend"
+          - "pytest-homeassistant-custom-component"
     schedule:
       interval: "weekly"
     cooldown:

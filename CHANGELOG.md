@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Compatibility checks now run against Home Assistant 2026.8.0 and 2026.9.1, each with its matching frontend. The minimum supported version remains 2026.8.0.
+
 - Home Assistant 2026.8.0 or later is now required. Environmental history adds schema 6. Back up before upgrading; returning to an older integration build requires its matching database backup.
 
 - Data sources now run on an internal provider framework with declared capabilities, per-provider sync state, and health status. Entity and manual ingestion behave exactly as before; the database migrates to schema version 2 to add provider state storage.

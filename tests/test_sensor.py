@@ -162,7 +162,9 @@ async def test_single_device_owns_all_entities(hass, config_entry):
     await setup_integration(hass, config_entry)
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
-    device = device_registry.async_get_device({(DOMAIN, config_entry.entry_id)})
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, config_entry.entry_id), config_entry.entry_id
+    )
     assert device is not None
     assert device.name == NAME
     entries = er.async_entries_for_device(entity_registry, device.id)
