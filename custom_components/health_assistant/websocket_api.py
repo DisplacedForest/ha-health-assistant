@@ -11,6 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import HealthSummary
+from .overview import build_overview, reading_payload
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .store import (
     DEFAULT_PERSON_ID,
@@ -19,6 +20,8 @@ from .store import (
     StoreValidationError,
     Workout,
 )
+from .store.panel_queries import PanelQueries
+from .store.reconciliation import rule_for
 from .store.units import canonical_unit
 
 MAX_POINTS = 500
@@ -155,6 +158,89 @@ def _positive_id(value: Any) -> int:
     return value
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/overview"})
+@websocket_api.async_response
+async def ws_overview(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+    data = entry.runtime_data
+    result = await hass.async_add_executor_job(
+        build_overview, data.database, data.repository
+    )
+    result["providers"] = [
+        {
+            "key": key[:120],
+            "name": provider.display_name[:120],
+            "degraded": data.registry.status(key).degraded,
+            "last_success": (
+                data.registry.status(key).last_success.isoformat()
+                if data.registry.status(key).last_success
+                else None
+            ),
+            "had_error": data.registry.status(key).last_error is not None,
+        }
+        for key, provider in list(data.registry.providers.items())[:32]
+    ]
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/observation_detail",
+        vol.Required("observation_id"): _positive_id,
+    }
+)
+@websocket_api.async_response
+async def ws_observation_detail(hass, connection, msg) -> None:
+    entry = _loaded_entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Health Assistant is not loaded")
+        return
+
+    def detail():
+        data = entry.runtime_data
+        with data.database.transaction():
+            row = data.repository.get_observation(
+                DEFAULT_PERSON_ID, msg["observation_id"]
+            )
+            if row is None:
+                return None
+            queries = PanelQueries(data.database)
+            claims = queries.claims(row.id)
+            window = rule_for(row.metric).suspicious_window
+            nearby = (
+                queries.nearby(row, row.observed_at - window, row.observed_at + window)
+                if window
+                else []
+            )
+            for claim in claims:
+                claim["selected"] = (
+                    claim["provider"] == row.provider
+                    and claim["external_id"] == row.external_id
+                )
+                claim["provider"] = claim["provider"][:120]
+                claim["external_id"] = claim["external_id"][:240]
+            for candidate in nearby:
+                candidate["provider"] = candidate["provider"][:120]
+            return {
+                "observation": reading_payload(row),
+                "metric": row.metric.value,
+                "claims": claims,
+                "claim_count": claims[0]["total"] if claims else 0,
+                "nearby": nearby,
+            }
+
+    result = await hass.async_add_executor_job(detail)
+    if result is None:
+        connection.send_error(
+            msg["id"], "not_found", "Observation is no longer available"
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/observations",
@@ -225,3 +311,5 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_time_series)
     websocket_api.async_register_command(hass, ws_observations)
     websocket_api.async_register_command(hass, ws_observation_exclusion)
+    websocket_api.async_register_command(hass, ws_overview)
+    websocket_api.async_register_command(hass, ws_observation_detail)

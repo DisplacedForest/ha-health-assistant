@@ -1,4 +1,5 @@
 import { LitElement, html, css, svg, nothing } from "lit";
+import { renderOverview, renderDetail, overviewStyles } from "./overview-view.js";
 
 const KG_TO_LB = 2.204622621848776;
 const M_TO_MI = 1 / 1609.344;
@@ -17,6 +18,9 @@ const RANGES = [7, 30, 90];
 const PROVIDER_LABELS = {
   ha_entity: "Home Assistant sensors",
   manual: "Manual entries",
+  withings: "Withings",
+  fitbit: "Fitbit",
+  hevy: "Hevy",
 };
 
 class HealthAssistantPanel extends LitElement {
@@ -24,7 +28,15 @@ class HealthAssistantPanel extends LitElement {
     hass: { attribute: false },
     narrow: { type: Boolean },
     panel: { attribute: false },
-    _summary: { state: true },
+    _overview: { state: true },
+    _loading: { state: true },
+    _detailMetric: { state: true },
+    _detail: { state: true },
+    _records: { state: true },
+    _showExcluded: { state: true },
+    _detailError: { state: true },
+    _detailLoading: { state: true },
+    _busyId: { state: true },
     _series: { state: true },
     _tab: { state: true },
     _metric: { state: true },
@@ -42,6 +54,10 @@ class HealthAssistantPanel extends LitElement {
     this._form = null;
     this._saving = false;
     this._loadedOnce = false;
+    this._showExcluded = false;
+    this._records = [];
+    this._request = 0;
+    this._detailRequest = 0;
   }
 
   get _domain() {
@@ -64,25 +80,116 @@ class HealthAssistantPanel extends LitElement {
     }
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    this._timer = window.setInterval(() => {
+      if (this.hass && !this._loading) this._refresh();
+    }, 60000);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.clearInterval(this._timer);
+  }
+
   async _refresh() {
+    const request = ++this._request;
+    this._loading = true;
     this._error = undefined;
     try {
-      this._summary = await this.hass.callWS({ type: `${this._domain}/summary` });
-      await this._loadSeries();
-    } catch (err) {
-      this._error = (err && err.message) || "Unable to load health data";
+      const overview = await this.hass.callWS({ type: `${this._domain}/overview` });
+      if (request === this._request) this._overview = overview;
+      if (this._tab === "trends") await this._loadSeries();
+    } catch {
+      if (request === this._request) this._error = "Health data could not refresh. Check the integration and try again.";
+    } finally {
+      if (request === this._request) this._loading = false;
+    }
+  }
+
+  _providerName(key) {
+    return PROVIDER_LABELS[key] || this._overview?.providers.find((p) => p.key === key)?.name || key.replaceAll("_", " ");
+  }
+
+  _label(key) {
+    return METRICS.find((m) => m.key === key)?.label || key;
+  }
+
+  async _openDetail(metric, event) {
+    this._opener = event?.currentTarget;
+    this._detailMetric = metric;
+    this._detail = undefined;
+    this._showExcluded = false;
+    this._records = [];
+    await this.updateComplete;
+    this.shadowRoot.querySelector("dialog").showModal();
+    await this._loadDetail();
+  }
+
+  _closeDetail() {
+    this._detailRequest++;
+    this.shadowRoot.querySelector("dialog")?.close();
+    this._detailMetric = undefined;
+    this._opener?.focus();
+  }
+
+  async _loadDetail(observationId, more = false) {
+    const request = ++this._detailRequest;
+    const metric = this._detailMetric;
+    if (!metric) return;
+    this._detailLoading = true;
+    this._detailError = undefined;
+    const current = this._overview?.metrics.find((m) => m.metric === metric)?.current;
+    try {
+      const records = await this.hass.callWS({
+        type: `${this._domain}/observations`, metric,
+        excluded: this._showExcluded, limit: 20,
+        ...(more && this._nextRecord ? {before_id: this._nextRecord} : {}),
+      });
+      const id = observationId || (this._showExcluded ? records.observations[0]?.id : current?.id);
+      const detail = id ? await this.hass.callWS({type: `${this._domain}/observation_detail`, observation_id: id}) : undefined;
+      if (request !== this._detailRequest) return;
+      this._records = more ? [...this._records, ...records.observations] : records.observations;
+      this._nextRecord = records.next_before_id;
+      this._detail = detail;
+    } catch {
+      if (request === this._detailRequest) this._detailError = "That reading could not load. It may have changed during a sync. Try again.";
+    } finally {
+      if (request === this._detailRequest) this._detailLoading = false;
+    }
+  }
+
+  async _toggleExclusion() {
+    const reading = this._detail?.observation;
+    if (!reading || this._busyId) return;
+    this._busyId = reading.id;
+    this._detailError = undefined;
+    try {
+      await this.hass.callWS({type: `${this._domain}/observation_exclusion`, observation_id: reading.id, excluded: !reading.excluded});
+      await this._refresh();
+      await this._loadDetail(reading.id);
+    } catch {
+      this._detailError = "The reading could not be changed. Refresh and try again.";
+    } finally {
+      this._busyId = undefined;
+      await this.updateComplete;
+      this.shadowRoot.querySelector(".exclusion-control button")?.focus();
     }
   }
 
   async _loadSeries() {
+    const request = (this._seriesRequest || 0) + 1;
+    this._seriesRequest = request;
+    this._series = undefined;
     try {
-      this._series = await this.hass.callWS({
+      const series = await this.hass.callWS({
         type: `${this._domain}/time_series`,
         metric: this._metric,
         days: this._days,
       });
-    } catch (err) {
-      this._error = (err && err.message) || "Unable to load trend data";
+      if (request === this._seriesRequest) this._series = series;
+    } catch {
+      if (request === this._seriesRequest) this._error = "Trend data could not load. Try refreshing.";
     }
   }
 
@@ -143,12 +250,6 @@ class HealthAssistantPanel extends LitElement {
     return date.toLocaleDateString();
   }
 
-  _readingTime(entry) {
-    if (!entry) {
-      return nothing;
-    }
-    return html`<div class="sub">${this._when(entry.observed_at)}</div>`;
-  }
 
   _metricValue(entry, digits = 1) {
     if (!entry) {
@@ -315,105 +416,14 @@ class HealthAssistantPanel extends LitElement {
     `;
   }
 
-  _renderEmptyState() {
-    return html`
-      <div class="card guide">
-        <h2>No health data yet</h2>
-        <p>
-          Health Assistant builds a local health record from sources you already
-          have.
-        </p>
-        <p>
-          <b>Map sensors.</b> Open Settings, then Devices &amp; services, choose
-          Health Assistant, and press Configure. Pick the sensors that feed each
-          metric, like a smart scale's weight sensor.
-        </p>
-        <p><b>Or record something right now.</b></p>
-        <button class="primary" @click=${() => this._openForm("measure")}>
-          Log a measurement
-        </button>
-        ${this._measurementForm()}
-      </div>
-    `;
-  }
-
   _renderOverview() {
-    const s = this._summary;
-    if (!s) {
-      return nothing;
-    }
-    const empty =
-      !s.current_weight &&
-      !s.current_body_fat &&
-      !s.steps_today &&
-      !s.active_energy_today &&
-      !s.latest_workout;
-    if (empty) {
-      return this._renderEmptyState();
-    }
-    const workout = s.latest_workout;
-    return html`
-      <div class="grid">
-        <div class="card">
-          <h2>Body</h2>
-          <div class="row">
-            <span class="label">Weight</span>
-            <span>${this._metricValue(s.current_weight)}</span>
-          </div>
-          ${this._readingTime(s.current_weight)}
-          <div class="row">
-            <span class="label">Body fat</span>
-            <span>${this._metricValue(s.current_body_fat)}</span>
-          </div>
-          ${this._readingTime(s.current_body_fat)}
-          <button class="ghost" @click=${() => this._openForm("measure")}>
-            Log a measurement
-          </button>
-          ${this._measurementForm()}
-        </div>
-        <div class="card">
-          <h2>Today</h2>
-          <div class="row">
-            <span class="label">Steps</span>
-            <span>${this._metricValue(s.steps_today, 0)}</span>
-          </div>
-          ${this._readingTime(s.steps_today)}
-          <div class="row">
-            <span class="label">Active energy</span>
-            <span>${this._metricValue(s.active_energy_today, 0)}</span>
-          </div>
-          ${this._readingTime(s.active_energy_today)}
-        </div>
-        <div class="card">
-          <h2>Latest workout</h2>
-          ${workout
-            ? html`
-                <div class="row">
-                  <span class="label">${workout.title || workout.workout_type}</span>
-                  <span class="value">${this._fmt(workout.duration_seconds / 60, 0)}
-                    <span class="unit">min</span></span>
-                </div>
-                <div class="sub">
-                  ${workout.workout_type} · ${this._when(workout.started_at)}
-                </div>
-                <div class="row">
-                  <span class="label">Last 7 days</span>
-                  <span class="value">${s.workouts_last_7_days ?? "no data"}</span>
-                </div>
-              `
-            : html`<p class="empty-value">No workouts recorded yet.</p>`}
-          <button class="ghost" @click=${() => this._openForm("workout")}>
-            Log workout
-          </button>
-          ${this._workoutForm()}
-        </div>
-      </div>
-    `;
+    return renderOverview(this);
   }
 
   _chart() {
     const series = this._series;
-    if (!series || series.points.length === 0) {
+    if (!series) return html`<p role="status">Loading trend…</p>`;
+    if (series.points.length === 0) {
       return html`<p class="empty-value">
         No ${this._metricLabel().toLowerCase()} data in the last ${this._days} days.
       </p>`;
@@ -507,8 +517,10 @@ class HealthAssistantPanel extends LitElement {
     return html`
       <div class="wrapper">
         <header>
-          <h1>Health</h1>
-          <nav>
+          ${this.narrow ? html`<button aria-label="Open sidebar" @click=${() => this.dispatchEvent(new window.Event("hass-toggle-menu", { bubbles: true, composed: true }))}>Menu</button>` : nothing}
+          <div><h1>Health</h1><p class="page-subtitle">Your record, at a glance</p></div>
+          <nav aria-label="Health views">
+            <button @click=${this._refresh} ?disabled=${this._loading}>${this._loading ? "Refreshing" : "Refresh"}</button>
             <button
               class=${this._tab === "overview" ? "active" : ""}
               @click=${() => this._setTab("overview")}
@@ -527,11 +539,12 @@ class HealthAssistantPanel extends LitElement {
           ? html`<div class="card error">${this._error}</div>`
           : nothing}
         ${this._tab === "overview" ? this._renderOverview() : this._renderTrends()}
+        ${renderDetail(this)}
       </div>
     `;
   }
 
-  static styles = css`
+  static styles = [overviewStyles, css`
     :host {
       display: block;
       height: 100%;
@@ -698,7 +711,7 @@ class HealthAssistantPanel extends LitElement {
     circle {
       fill: var(--primary-color, #03a9f4);
     }
-  `;
+  `];
 }
 
 if (!customElements.get("health-assistant-panel")) {
