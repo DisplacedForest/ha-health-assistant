@@ -1,6 +1,6 @@
 # Portable history format
 
-Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 7, including sleep sessions. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
+Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 8, including sleep sessions and recovery observations. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
 
 ## Actions
 
@@ -10,7 +10,7 @@ Both actions require a Home Assistant administrator. `path` names a `.tar.gz` fi
 
 `import_history` takes `dry_run`, which defaults to `true`. It first copies the input into private staging, validates the complete archive, then simulates the merge against a database snapshot. Validation or simulation failure leaves the live database unchanged. A dry run stops there. Set `dry_run: false` to apply the validated history. The health phase is atomic; later domains use bounded transaction batches.
 
-The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout and active sleep bounds, and environmental bucket bounds. Bucket bounds do not imply complete sensor coverage.
+The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout, active sleep and recovery bounds, and environmental bucket bounds. Bucket bounds do not imply complete sensor coverage.
 
 The applied response also contains actual write counts. Those counts can differ from the preview if ingestion changed the database between simulation and application. Imported priorities apply even when a metric has no incoming readings. An empty priority list resets that metric to the store's default ordering.
 
@@ -26,7 +26,8 @@ Members appear exactly once, in this order. They must be regular files, with no 
 6. `environment_streams.jsonl`
 7. `environment_buckets.jsonl`
 8. `environment_maintenance.jsonl`
-9. `sleep_sessions.jsonl` (format 2/schema 7 only)
+9. `sleep_sessions.jsonl` (format 2/schema 7 and 8)
+10. `recovery_records.jsonl` (format 2/schema 8 only)
 
 JSON is UTF-8. Each JSONL record is one object followed by a newline. Duplicate JSON keys, non-finite numbers and unknown or missing fields are rejected. Empty domains have zero-byte files. Files have no header rows. Archive readers do not extract paths supplied by the tar headers.
 
@@ -36,15 +37,15 @@ The manifest has exactly these fields:
 | --- | --- |
 | `format` | `health-assistant` |
 | `format_version` | Integer `2` |
-| `source_schema_version` | Integer `7` |
+| `source_schema_version` | Integer `8` |
 | `created_at` | ISO 8601 timestamp with timezone |
-| `files` | Object keyed by the eight JSONL filenames |
+| `files` | Object keyed by the nine JSONL filenames |
 
 Each `files` entry contains `records`, `bytes` and a lowercase SHA-256 `sha256` for the exact uncompressed file bytes. Counts, sizes and checksums must match. The gzip trailer is checked even after the tar end marker. Checksums detect damage, but they do not authenticate the archive's author. Only import files you trust with your history.
 
-The static compatibility registry accepts format 1/schema 6 and format 2/schema 7. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old 0.2 readers reject format 2. There is no downgrade export that drops sleep.
+The static compatibility registry accepts format 1/schema 6, format 2/schema 7 and format 2/schema 8. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old 0.2 readers reject format 2. Schema 7 readers reject the schema 8 layout. There is no downgrade export that drops later domains.
 
-An earlier archive that lacks a later domain does not change that domain in the destination. Importing a format 1 archive leaves existing sleep payloads, exclusions, tombstones and settings alone.
+An earlier archive that lacks a later domain does not change that domain in the destination. Importing a format 1 archive leaves existing sleep and recovery payloads, exclusions, tombstones and settings alone. Schema 7 imports leave recovery alone.
 
 ## Records
 
@@ -82,6 +83,12 @@ An upsert carries the complete normalized sleep payload described in [sleep prov
 Newer source revisions replace the complete payload, equal revision/hash pairs are unchanged, and lower revisions are counted as stale. Equal revisions with different hashes fail. Local exclusion merges with OR even when the archived source payload is stale. An old active payload never replaces a newer tombstone. Imported history does not reconnect an account.
 
 After the existing domains, sleep is replayed in batches of at most 100 sessions and 8 MiB. A failed batch rolls back; completed earlier phases and batches remain committed. Full validation and simulation run before any live phase, so a conflict found in preview starts no live writes. Counts distinguish `create`, `update`, `stale`, `unchanged`, `deleted` and `exclusion_change`. Stages are part of one session, not additional records.
+
+## Recovery records
+
+`recovery_records.jsonl` uses the same envelope fields as sleep. Its immutable `record_type` is `resting_heart_rate`, `hrv_sdnn`, `hrv_rmssd` or `respiratory_rate`. The complete normalized payload and hash projection are defined in [the recovery contract](recovery.md). Deletes have a null payload while retaining metric identity. Local IDs, ingestion times and query generations are not exported.
+
+Recovery replay uses source revision and hash, with sticky exclusion OR even on a stale payload. Metric reuse under one source identity is invalid. A full validation and simulated replay precede any live writes. Recovery batches have at most 100 records and 1 MiB, and commit independently after sleep. A conflict found in preview starts no live writes; earlier completed phases can survive an interruption during apply. Counts distinguish create, update, stale, unchanged, deleted and exclusion_change. Import never grants provider permissions.
 
 ## Merge and recovery
 

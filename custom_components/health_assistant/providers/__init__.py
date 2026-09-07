@@ -1,3 +1,10 @@
+from ..store.recovery import RecoveryRepository
+from ..store.recovery_models import (
+    CandidateRecoveryDeletion,
+    CandidateRecoveryObservation,
+    RecoveryChangeResult,
+    RecoveryObservation,
+)
 from ..store.sleep_models import CandidateSleepDeletion, CandidateSleepSession
 from .contract import (
     CandidateObservation,
@@ -15,6 +22,8 @@ from .sink import ProviderSink
 
 __all__ = [
     "CandidateObservation",
+    "CandidateRecoveryDeletion",
+    "CandidateRecoveryObservation",
     "CandidateSleepDeletion",
     "CandidateSleepSession",
     "CandidateWorkout",
@@ -27,5 +36,8 @@ __all__ = [
     "ProviderRegistry",
     "ProviderSink",
     "ProviderStatus",
+    "RecoveryChangeResult",
+    "RecoveryObservation",
+    "RecoveryRepository",
     "default_source_unit",
 ]

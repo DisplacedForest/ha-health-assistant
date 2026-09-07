@@ -74,7 +74,7 @@ def import_archive(
 
 
 def _summary(staging, manifest):
-    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams UNION SELECT provider FROM sleep_sessions"
+    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams UNION SELECT provider FROM sleep_sessions UNION SELECT provider FROM recovery_records"
     sources = [
         row["source"]
         for row in staging.execute(
@@ -84,7 +84,7 @@ def _summary(staging, manifest):
     source_count = staging.execute(f"SELECT count(*) AS count FROM ({sources_sql})")[0][
         "count"
     ]
-    times_sql = "SELECT observed_at AS first, observed_at AS last FROM source_claims UNION ALL SELECT started_at, ended_at FROM workouts UNION ALL SELECT started_at, ended_at FROM sleep_sessions WHERE source_state='active'"
+    times_sql = "SELECT observed_at AS first, observed_at AS last FROM source_claims UNION ALL SELECT started_at, ended_at FROM workouts UNION ALL SELECT started_at, ended_at FROM sleep_sessions WHERE source_state='active' UNION ALL SELECT started_at, ended_at FROM recovery_records WHERE source_state='active'"
     span = staging.execute(
         f"SELECT min(first) AS first, max(last) AS last FROM ({times_sql})"
     )[0]

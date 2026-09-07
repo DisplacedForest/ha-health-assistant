@@ -8,6 +8,8 @@ from homeassistant.util import dt as dt_util
 
 from ..signals import SIGNAL_HEALTH_DATA_UPDATED
 from ..store import HealthObservation, HealthRepository, MetricType, Workout
+from ..store.recovery import RecoveryRepository, archive_observation
+from ..store.recovery_models import RecoveryError, candidate_observation, metric_value
 from ..store.sleep import SleepRepository, archive_session
 from ..store.sleep_models import SleepError, candidate_session, canonical
 from ..store.units import canonical_unit, convert
@@ -27,12 +29,17 @@ class ProviderSink:
         provider: HealthProvider,
         on_result: Callable[[str, str | None], None],
         on_sleep_result: Callable[[str, str, str | None], None] | None = None,
+        on_recovery_result: Callable[[str, str, str | None], None] | None = None,
     ) -> None:
         self._hass = hass
         self._repository = repository
         self._provider = provider
         self._on_result = on_result
         self._on_sleep_result = on_sleep_result or (
+            lambda key, _source, error: on_result(key, error)
+        )
+
+        self._on_recovery_result = on_recovery_result or (
             lambda key, _source, error: on_result(key, error)
         )
 
@@ -148,6 +155,62 @@ class ProviderSink:
                 result.session.source_id for result in results if result.changed
             }:
                 self._on_sleep_result(self._provider.key, source_id, None)
+            self._on_result(self._provider.key, None)
+            async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
+        return results
+
+    async def async_apply_recovery_changes(self, changes, checkpoint=None):
+        self._require_import()
+        if not self._provider.capabilities.recovery_metrics:
+            raise ProviderCapabilityError(
+                "Provider does not declare recovery capability"
+            )
+        try:
+            if not isinstance(changes, (list, tuple)) or len(changes) > 100:
+                raise RecoveryError("recovery_batch_limit")
+            if any(
+                getattr(change, "source_id", None)
+                not in self._provider.recovery_source_ids
+                for change in changes
+            ):
+                raise RecoveryError("recovery_source_not_allowed")
+            if any(
+                metric_value(getattr(change, "metric", None))
+                not in self._provider.capabilities.recovery_metrics
+                for change in changes
+            ):
+                raise RecoveryError("recovery_metric_not_allowed")
+            provider = self._provider.key
+
+            def apply():
+                now = dt_util.utcnow()
+                normalized = []
+                size = 0
+                for change in changes:
+                    observation = candidate_observation(provider, change, now)
+                    size += len(canonical(archive_observation(observation), 40960))
+                    if size > 1024 * 1024:
+                        raise RecoveryError("recovery_batch_limit")
+                    normalized.append(observation)
+                return RecoveryRepository(
+                    self._repository._db, clock=lambda: now
+                ).apply_recovery_changes(
+                    normalized,
+                    (provider, checkpoint) if checkpoint is not None else None,
+                )
+
+            results = await self._hass.async_add_executor_job(apply)
+        except RecoveryError as err:
+            if err.source_id in self._provider.recovery_source_ids:
+                self._on_recovery_result(self._provider.key, err.source_id, err.code)
+            else:
+                self._on_result(self._provider.key, err.code)
+            raise
+        if any(result.changed for result in results):
+            for source_id in {
+                result.observation.source_id for result in results if result.changed
+            }:
+                self._on_recovery_result(self._provider.key, source_id, None)
             self._on_result(self._provider.key, None)
             async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
         return results

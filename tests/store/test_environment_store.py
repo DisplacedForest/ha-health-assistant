@@ -352,7 +352,7 @@ def test_upgrade_from_schema_five_preserves_excluded_history(tmp_path):
         assert [
             tuple(row) for row in upgraded.execute("SELECT * FROM observations")
         ] == before
-        assert upgraded.execute("SELECT version FROM schema_info")[0][0] == 7
+        assert upgraded.execute("SELECT version FROM schema_info")[0][0] == 8
         assert upgraded.execute("SELECT count(*) FROM environment_buckets")[0][0] == 0
         assert upgraded.execute("PRAGMA integrity_check")[0][0] == "ok"
     finally:

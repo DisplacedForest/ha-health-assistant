@@ -85,6 +85,8 @@ Sleep is a separate capability, disabled by default. Declare `sleep_sessions=Tru
 
 Sleep's normalization, queries and repository stay independent of Home Assistant. Its source hashes use pinned `rfc8785`, after typed normalization. The frozen JSON vectors were compared with Node's `canonicalize` implementation. The released archive fixture was exported by version 0.2.0 at commit `f15d5885cbf0601f5c8dd8f87a5a834fac9af813`, using synthetic data. Keep its bytes unchanged when extending archive readers.
 
+Recovery follows the same revision boundary with `CandidateRecoveryObservation` and `CandidateRecoveryDeletion`. Declare `recovery_metrics` and explicitly selected `recovery_source_ids`; both default to empty. Use `async_apply_recovery_changes`, keeping HRV methods, contexts and algorithm versions separate. See [the recovery contract](docs/recovery.md). Baseline calculations belong to the shared derived layer.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.

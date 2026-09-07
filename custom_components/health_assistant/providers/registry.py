@@ -39,6 +39,7 @@ class ProviderRegistry:
         self._sinks: dict[str, ProviderSink] = {}
         self._statuses: dict[str, ProviderStatus] = {}
         self._sleep_statuses: dict[str, dict[str, ProviderStatus]] = {}
+        self._recovery_statuses: dict[str, dict[str, ProviderStatus]] = {}
         self._timers: list[CALLBACK_TYPE] = []
         self._sync_locks: dict[str, asyncio.Lock] = {}
 
@@ -57,10 +58,14 @@ class ProviderRegistry:
             provider,
             self._record_result,
             self._record_sleep_result,
+            self._record_recovery_result,
         )
         self._statuses[key] = ProviderStatus()
         self._sleep_statuses[key] = {
             source_id: ProviderStatus() for source_id in provider.sleep_source_ids
+        }
+        self._recovery_statuses[key] = {
+            source_id: ProviderStatus() for source_id in provider.recovery_source_ids
         }
         self._sync_locks[key] = asyncio.Lock()
 
@@ -69,8 +74,19 @@ class ProviderRegistry:
 
     def status(self, key: str, source_id: str | None = None) -> ProviderStatus:
         if source_id is not None:
-            return self._sleep_statuses[key][source_id]
-        statuses = [self._statuses[key], *self._sleep_statuses[key].values()]
+            statuses = [
+                mapping[key][source_id]
+                for mapping in (self._sleep_statuses, self._recovery_statuses)
+                if source_id in mapping[key]
+            ]
+            if not statuses:
+                raise KeyError(source_id)
+        else:
+            statuses = [
+                self._statuses[key],
+                *self._sleep_statuses[key].values(),
+                *self._recovery_statuses[key].values(),
+            ]
         successes = [
             status.last_success
             for status in statuses
@@ -115,6 +131,16 @@ class ProviderRegistry:
             last_error=error if error is not None else previous.last_error,
         )
 
+    def _record_recovery_result(
+        self, key: str, source_id: str, error: str | None
+    ) -> None:
+        previous = self._recovery_statuses[key][source_id]
+        self._recovery_statuses[key][source_id] = ProviderStatus(
+            degraded=error is not None,
+            last_success=dt_util.utcnow() if error is None else previous.last_success,
+            last_error=error if error is not None else previous.last_error,
+        )
+
     async def async_start(self) -> None:
         seeds = [
             (metric, key)
@@ -132,7 +158,10 @@ class ProviderRegistry:
             try:
                 await provider.async_start(self._sinks[key])
             except SleepError as err:
-                if err.source_id not in self._sleep_statuses[key]:
+                if (
+                    err.source_id not in self._sleep_statuses[key]
+                    and err.source_id not in self._recovery_statuses[key]
+                ):
                     self._record_result(key, err.code)
                 continue
             except Exception as err:
@@ -180,7 +209,10 @@ class ProviderRegistry:
                         self._repository.set_provider_state, key, new_state
                     )
             except SleepError as err:
-                if err.source_id not in self._sleep_statuses[key]:
+                if (
+                    err.source_id not in self._sleep_statuses[key]
+                    and err.source_id not in self._recovery_statuses[key]
+                ):
                     self._record_result(key, err.code)
                 return
             except Exception as err:

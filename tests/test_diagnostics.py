@@ -172,6 +172,7 @@ async def test_provider_diagnostics_redact_failure_and_recovery(
             "metrics": ["body_fat_percentage", "weight"],
             "workouts": True,
             "sleep_sessions": False,
+            "recovery_metrics": [],
             "can_import": True,
             "can_export": True,
         },

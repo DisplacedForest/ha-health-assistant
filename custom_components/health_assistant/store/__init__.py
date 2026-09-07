@@ -28,6 +28,13 @@ from .reconciliation import (
     rule_for,
     values_close,
 )
+from .recovery import RecoveryRepository
+from .recovery_models import (
+    CandidateRecoveryDeletion,
+    CandidateRecoveryObservation,
+    RecoveryChangeResult,
+    RecoveryObservation,
+)
 from .repository import HealthRepository
 from .sleep import SleepRepository
 from .sleep_models import (
@@ -45,6 +52,8 @@ __all__ = [
     "DEFAULT_PERSON_ID",
     "RECONCILIATION_RULES",
     "BodyMeasurement",
+    "CandidateRecoveryDeletion",
+    "CandidateRecoveryObservation",
     "CandidateSleepDeletion",
     "CandidateSleepSession",
     "DailyActivity",
@@ -55,6 +64,9 @@ __all__ = [
     "MetricType",
     "ReconciliationRule",
     "RecordStatus",
+    "RecoveryChangeResult",
+    "RecoveryObservation",
+    "RecoveryRepository",
     "SleepChangeResult",
     "SleepRepository",
     "SleepSession",

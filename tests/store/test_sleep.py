@@ -450,12 +450,12 @@ def test_detail_pins_revision_and_kind(database):
 def test_migration_seven_is_additive_and_rollback_is_atomic(tmp_path):
     path = tmp_path / "old.sqlite"
     connection = sqlite3.connect(path)
-    apply_migrations(connection, MIGRATIONS[:-1], latest=6)
+    apply_migrations(connection, MIGRATIONS[:6], latest=6)
     connection.execute(
         "INSERT INTO provider_state VALUES('fixture','{}','2026-09-07T00:00:00Z')"
     )
     connection.commit()
-    broken = ((7, (*MIGRATIONS[-1][1], "SELECT missing_column FROM sleep_sessions")),)
+    broken = ((7, (*MIGRATIONS[6][1], "SELECT missing_column FROM sleep_sessions")),)
     with pytest.raises(sqlite3.OperationalError):
         apply_migrations(connection, broken, latest=7)
     assert connection.execute("SELECT version FROM schema_info").fetchone()[0] == 6
@@ -465,7 +465,7 @@ def test_migration_seven_is_additive_and_rollback_is_atomic(tmp_path):
     connection.close()
     database = HealthDatabase(path)
     database.open()
-    assert database.execute("SELECT version FROM schema_info")[0][0] == 7
+    assert database.execute("SELECT version FROM schema_info")[0][0] == 8
     assert database.execute("SELECT count(*) FROM provider_state")[0][0] == 1
     assert database.execute("SELECT count(*) FROM sleep_sessions")[0][0] == 0
     database.close()

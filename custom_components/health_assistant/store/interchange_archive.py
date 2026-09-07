@@ -37,6 +37,7 @@ def archive_domains(manifest):
 
 ORDER = {
     "sleep_sessions": "id",
+    "recovery_records": "id",
     "observations": "id",
     "source_claims": "id",
     "workouts": "id",
@@ -96,6 +97,11 @@ def snapshot_records(connection, domain: str) -> Iterator[dict]:
                     from .sleep import archive_session, session_from_row
 
                     yield archive_session(session_from_row(row))
+                    continue
+                if domain == "recovery_records":
+                    from .recovery import archive_observation, observation_from_row
+
+                    yield archive_observation(observation_from_row(row))
                     continue
                 record = dict(row)
                 if "provenance" in record:
