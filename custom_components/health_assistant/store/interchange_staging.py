@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .db import HealthDatabase
@@ -27,8 +28,14 @@ def validate_archive(path: Path, staging_path: Path):
     try:
 
         def consume(domain, record):
-            value = validate_record(domain, record)
-            if "provenance" in value:
+            if domain == "sleep_sessions":
+                from .sleep import parse_archive_session, session_columns
+
+                now = datetime.now(UTC)
+                value = session_columns(parse_archive_session(record, now), now)
+            else:
+                value = validate_record(domain, record)
+            if "provenance" in value and domain != "sleep_sessions":
                 value["provenance"] = json.dumps(
                     value["provenance"],
                     sort_keys=True,

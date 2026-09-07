@@ -1,6 +1,6 @@
 # Portable history format
 
-Format 1 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 6. It is separate from the database backup format. No schema migration is part of importing an archive.
+Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 7, including sleep sessions. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
 
 ## Actions
 
@@ -10,7 +10,7 @@ Both actions require a Home Assistant administrator. `path` names a `.tar.gz` fi
 
 `import_history` takes `dry_run`, which defaults to `true`. It first copies the input into private staging, validates the complete archive, then simulates the merge against a database snapshot. Validation or simulation failure leaves the live database unchanged. A dry run stops there. Set `dry_run: false` to apply the validated history. The health phase is atomic; later domains use bounded transaction batches.
 
-The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout bounds and environmental bucket bounds. Bucket bounds do not imply complete sensor coverage.
+The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout and active sleep bounds, and environmental bucket bounds. Bucket bounds do not imply complete sensor coverage.
 
 The applied response also contains actual write counts. Those counts can differ from the preview if ingestion changed the database between simulation and application. Imported priorities apply even when a metric has no incoming readings. An empty priority list resets that metric to the store's default ordering.
 
@@ -26,6 +26,7 @@ Members appear exactly once, in this order. They must be regular files, with no 
 6. `environment_streams.jsonl`
 7. `environment_buckets.jsonl`
 8. `environment_maintenance.jsonl`
+9. `sleep_sessions.jsonl` (format 2/schema 7 only)
 
 JSON is UTF-8. Each JSONL record is one object followed by a newline. Duplicate JSON keys, non-finite numbers and unknown or missing fields are rejected. Empty domains have zero-byte files. Files have no header rows. Archive readers do not extract paths supplied by the tar headers.
 
@@ -34,14 +35,16 @@ The manifest has exactly these fields:
 | Field | Value |
 | --- | --- |
 | `format` | `health-assistant` |
-| `format_version` | Integer `1` |
-| `schema_version` | Integer `6` |
+| `format_version` | Integer `2` |
+| `source_schema_version` | Integer `7` |
 | `created_at` | ISO 8601 timestamp with timezone |
-| `files` | Object keyed by the seven JSONL filenames |
+| `files` | Object keyed by the eight JSONL filenames |
 
 Each `files` entry contains `records`, `bytes` and a lowercase SHA-256 `sha256` for the exact uncompressed file bytes. Counts, sizes and checksums must match. The gzip trailer is checked even after the tar end marker. Checksums detect damage, but they do not authenticate the archive's author. Only import files you trust with your history.
 
-Readers currently support only format 1 and schema 6. Higher versions are rejected before live writes. A future format must get its own reader or an explicit conversion path; changing the version number is not a conversion.
+The static compatibility registry accepts format 1/schema 6 and format 2/schema 7. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old 0.2 readers reject format 2. There is no downgrade export that drops sleep.
+
+An earlier archive that lacks a later domain does not change that domain in the destination. Importing a format 1 archive leaves existing sleep payloads, exclusions, tombstones and settings alone.
 
 ## Records
 
@@ -56,6 +59,7 @@ Database integer IDs in an archive are local references within that archive. The
 | Environmental streams | `id`, `public_id`, `mapping_id`, `source_id`, `entity_id`, `metric`, `area_id`, `area_name`, `unit` |
 | Environmental buckets | `stream_id`, `start_ms`, `resolution_s`, `sample_count`, `sample_sum`, `minimum`, `maximum`, `weighted_sum`, `covered_ms`, `first_report_ms`, `last_report_ms`, `updated_ms` |
 | Environmental maintenance | `id`, `last_success_ms`, `duration_ms`, `rolled_up`, `deleted`, `failed` |
+| Sleep sessions | `person_id`, `provider`, `source_id`, `external_id`, `source_revision`, `payload_hash`, `hash_version`, `record_type`, `operation`, `payload`, `locally_excluded` |
 
 Canonical observations must agree with the claims, priorities, exclusions and duplicate flags when the existing reconciliation rules run over them. Every observation needs a claim, and every claim references a matching observation. The importer verifies that consistency in staging. It then replays claims through the canonical repository instead of copying the archive's canonical rows into the destination.
 
@@ -68,6 +72,16 @@ Environmental metrics are `temperature` in °C, `humidity` in % and `co2` in ppm
 Environmental buckets are UTC-aligned at 300 or 3600 seconds. Times and durations use integer milliseconds. `sample_sum / sample_count` is a sample mean. `weighted_sum / covered_ms` is a time-weighted mean over covered intervals. A zero denominator means unavailable, not a zero measurement. Extrema include the covered values and fresh samples. First and last report times are null when there were no samples. Carried coverage can exist without a sample inside that bucket. Fine and hourly rows cannot overlap for a stream. Bounds, coverage, extrema and sums are validated before replay.
 
 There is exactly one maintenance row with `id: 1`. Last success and duration may be null, counters are nonnegative, and `failed` is zero or one. The maintenance row is restored when the destination's resulting complete environmental domain matches the archive. When history is combined with other or newer local streams or buckets, the destination keeps its existing maintenance state.
+
+## Sleep records
+
+Sleep identity is `(provider, source_id, external_id)`, scoped to `person_id=primary`. No local row ID, ingestion timestamp, query generation or provider checkpoint is exported. `source_revision` is a canonical decimal string between `"1"` and `"9223372036854775807"`. `hash_version` is integer 1, `record_type` is `sleep_session`, and `operation` is `upsert` or `delete`. Deletions have `payload=null`; they retain identity, revision/hash and the boolean local exclusion only.
+
+An upsert carries the complete normalized sleep payload described in [sleep provider guidance](sleep.md), including nullable endpoint metadata, fixed totals and provenance fields, and sorted stage/context arrays. A lowercase SHA-256 of the RFC8785 projection verifies that content. Revisions and local exclusion are outside the source hash. Archive checksums and record hashes have different jobs and neither authenticates a source.
+
+Newer source revisions replace the complete payload, equal revision/hash pairs are unchanged, and lower revisions are counted as stale. Equal revisions with different hashes fail. Local exclusion merges with OR even when the archived source payload is stale. An old active payload never replaces a newer tombstone. Imported history does not reconnect an account.
+
+After the existing domains, sleep is replayed in batches of at most 100 sessions and 8 MiB. A failed batch rolls back; completed earlier phases and batches remain committed. Full validation and simulation run before any live phase, so a conflict found in preview starts no live writes. Counts distinguish `create`, `update`, `stale`, `unchanged`, `deleted` and `exclusion_change`. Stages are part of one session, not additional records.
 
 ## Merge and recovery
 

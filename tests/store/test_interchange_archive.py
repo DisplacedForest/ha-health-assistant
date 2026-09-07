@@ -68,7 +68,7 @@ def test_archive_record_memory_bound():
 
 def test_manifest_rejects_future_and_boolean_versions(database, tmp_path):
     manifest = export_archive(database, tmp_path / "history.tar.gz")
-    for version in (True, 2, "1"):
+    for version in (True, 3, "1"):
         manifest["format_version"] = version
         with pytest.raises(StoreValidationError, match="format version"):
             validate_manifest(manifest)

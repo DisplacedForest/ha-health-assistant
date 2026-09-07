@@ -152,6 +152,7 @@ def replay_archive(staging, target, after_batch=None):
                 state["failed"],
             ),
         )
+    _replay_sleep(staging, target, counts, after_batch)
     return counts
 
 
@@ -273,3 +274,41 @@ def _environment_matches(staging, target, stream_ids):
         if not rows or not _same(dict(rows[0]), incoming, set()):
             return False
     return True
+
+
+def _replay_sleep(staging, target, counts, after_batch):
+    from .sleep import SleepRepository, session_from_row
+
+    repository = SleepRepository(target)
+    batch = []
+    size = 0
+    for row in rows_by_id(staging, "sleep_sessions"):
+        record_size = sum(
+            len(value.encode("utf-8"))
+            for value in row.values()
+            if isinstance(value, str)
+        )
+        if len(batch) == 100 or size + record_size > 7 * 1024 * 1024:
+            _apply_sleep_batch(repository, batch, counts)
+            if after_batch:
+                after_batch("sleep_sessions")
+            batch, size = [], 0
+        batch.append(session_from_row(row))
+        size += record_size
+    if batch:
+        _apply_sleep_batch(repository, batch, counts)
+        if after_batch:
+            after_batch("sleep_sessions")
+
+
+def _apply_sleep_batch(repository, batch, counts):
+    results = repository.apply_sleep_changes(batch, merge_exclusions=True)
+    domain = counts.setdefault(
+        "sleep_sessions",
+        dict.fromkeys(
+            ("create", "update", "stale", "unchanged", "deleted", "exclusion_change"), 0
+        ),
+    )
+    for result in results:
+        domain["stale" if result.action == "stale_revision" else result.action] += 1
+        domain["exclusion_change"] += int(result.exclusion_changed)

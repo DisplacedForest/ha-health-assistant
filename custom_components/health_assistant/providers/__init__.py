@@ -1,3 +1,4 @@
+from ..store.sleep_models import CandidateSleepDeletion, CandidateSleepSession
 from .contract import (
     CandidateObservation,
     CandidateWorkout,
@@ -14,6 +15,8 @@ from .sink import ProviderSink
 
 __all__ = [
     "CandidateObservation",
+    "CandidateSleepDeletion",
+    "CandidateSleepSession",
     "CandidateWorkout",
     "EntityProvider",
     "HealthProvider",

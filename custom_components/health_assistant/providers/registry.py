@@ -11,6 +11,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from ..store import HealthRepository
+from ..store.sleep_models import SleepError
 from .contract import (
     HealthProvider,
     ProviderCapabilityError,
@@ -37,6 +38,7 @@ class ProviderRegistry:
         self._providers: dict[str, HealthProvider] = {}
         self._sinks: dict[str, ProviderSink] = {}
         self._statuses: dict[str, ProviderStatus] = {}
+        self._sleep_statuses: dict[str, dict[str, ProviderStatus]] = {}
         self._timers: list[CALLBACK_TYPE] = []
         self._sync_locks: dict[str, asyncio.Lock] = {}
 
@@ -50,20 +52,46 @@ class ProviderRegistry:
             raise ProviderError(f"provider {key!r} is already registered")
         self._providers[key] = provider
         self._sinks[key] = ProviderSink(
-            self._hass, self._repository, provider, self._record_result
+            self._hass,
+            self._repository,
+            provider,
+            self._record_result,
+            self._record_sleep_result,
         )
         self._statuses[key] = ProviderStatus()
+        self._sleep_statuses[key] = {
+            source_id: ProviderStatus() for source_id in provider.sleep_source_ids
+        }
         self._sync_locks[key] = asyncio.Lock()
 
     def sink(self, key: str) -> ProviderSink:
         return self._sinks[key]
 
-    def status(self, key: str) -> ProviderStatus:
-        return self._statuses[key]
+    def status(self, key: str, source_id: str | None = None) -> ProviderStatus:
+        if source_id is not None:
+            return self._sleep_statuses[key][source_id]
+        statuses = [self._statuses[key], *self._sleep_statuses[key].values()]
+        successes = [
+            status.last_success
+            for status in statuses
+            if status.last_success is not None
+        ]
+        return ProviderStatus(
+            degraded=any(status.degraded for status in statuses),
+            last_success=max(successes) if successes else None,
+            last_error=next(
+                (
+                    status.last_error
+                    for status in statuses
+                    if status.last_error is not None
+                ),
+                None,
+            ),
+        )
 
     @property
     def statuses(self) -> Mapping[str, ProviderStatus]:
-        return MappingProxyType(self._statuses)
+        return MappingProxyType({key: self.status(key) for key in self._statuses})
 
     def _record_result(self, key: str, error: str | None) -> None:
         if error is None:
@@ -78,6 +106,14 @@ class ProviderRegistry:
                 last_success=self._statuses[key].last_success,
                 last_error=error,
             )
+
+    def _record_sleep_result(self, key: str, source_id: str, error: str | None) -> None:
+        previous = self._sleep_statuses[key][source_id]
+        self._sleep_statuses[key][source_id] = ProviderStatus(
+            degraded=error is not None,
+            last_success=dt_util.utcnow() if error is None else previous.last_success,
+            last_error=error if error is not None else previous.last_error,
+        )
 
     async def async_start(self) -> None:
         seeds = [
@@ -95,6 +131,10 @@ class ProviderRegistry:
         for key, provider in self._providers.items():
             try:
                 await provider.async_start(self._sinks[key])
+            except SleepError as err:
+                if err.source_id not in self._sleep_statuses[key]:
+                    self._record_result(key, err.code)
+                continue
             except Exception as err:
                 _LOGGER.exception("provider %s failed to start", key)
                 self._record_result(key, str(err))
@@ -139,6 +179,10 @@ class ProviderRegistry:
                     await self._hass.async_add_executor_job(
                         self._repository.set_provider_state, key, new_state
                     )
+            except SleepError as err:
+                if err.source_id not in self._sleep_statuses[key]:
+                    self._record_result(key, err.code)
+                return
             except Exception as err:
                 _LOGGER.exception("provider %s sync failed", key)
                 self._record_result(key, str(err) or type(err).__name__)

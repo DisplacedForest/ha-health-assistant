@@ -23,6 +23,7 @@ class ProviderCapabilityError(ProviderError):
 class ProviderCapabilities:
     metrics: frozenset[MetricType] = frozenset()
     workouts: bool = False
+    sleep_sessions: bool = False
     can_import: bool = True
     can_export: bool = False
 
@@ -71,6 +72,10 @@ class HealthProvider(ABC):
     @property
     @abstractmethod
     def capabilities(self) -> ProviderCapabilities: ...
+
+    @property
+    def sleep_source_ids(self) -> frozenset[str]:
+        return frozenset()
 
     @property
     def poll_interval(self) -> timedelta | None:
