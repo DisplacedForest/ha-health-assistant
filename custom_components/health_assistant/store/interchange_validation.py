@@ -5,74 +5,8 @@ from datetime import UTC, datetime
 
 from .errors import StoreValidationError
 from .interchange_archive import encode_record
+from .interchange_formats import LEGACY_FIELDS as FIELDS
 from .models import CANONICAL_UNITS, MetricType
-
-OBSERVATION_FIELDS = {
-    "id",
-    "person_id",
-    "metric",
-    "value",
-    "unit",
-    "observed_at",
-    "provider",
-    "external_id",
-    "ingested_at",
-    "provenance",
-    "status",
-}
-FIELDS = {
-    "observations": OBSERVATION_FIELDS | {"possible_duplicate"},
-    "source_claims": OBSERVATION_FIELDS | {"observation_id"},
-    "workouts": {
-        "id",
-        "person_id",
-        "provider",
-        "external_id",
-        "workout_type",
-        "title",
-        "started_at",
-        "ended_at",
-        "energy_kcal",
-        "distance_m",
-        "ingested_at",
-        "provenance",
-        "status",
-    },
-    "metric_priorities": {"metric", "context", "rank", "provider"},
-    "environment_streams": {
-        "id",
-        "public_id",
-        "mapping_id",
-        "source_id",
-        "entity_id",
-        "metric",
-        "area_id",
-        "area_name",
-        "unit",
-    },
-    "environment_buckets": {
-        "stream_id",
-        "start_ms",
-        "resolution_s",
-        "sample_count",
-        "sample_sum",
-        "minimum",
-        "maximum",
-        "weighted_sum",
-        "covered_ms",
-        "first_report_ms",
-        "last_report_ms",
-        "updated_ms",
-    },
-    "environment_maintenance": {
-        "id",
-        "last_success_ms",
-        "duration_ms",
-        "rolled_up",
-        "deleted",
-        "failed",
-    },
-}
 
 
 def integer(value, minimum=0, maximum=2**63 - 1):

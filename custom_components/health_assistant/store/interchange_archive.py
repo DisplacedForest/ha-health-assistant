@@ -14,23 +14,29 @@ from tempfile import TemporaryDirectory
 
 from .db import HealthDatabase
 from .errors import StoreValidationError
+from .interchange_formats import COMPATIBILITY, DOMAINS
 from .schema import SCHEMA_VERSION
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 MAX_RECORD_BYTES = 1_048_576
 MAX_EXPANDED_BYTES = 8_589_934_592
 MAX_COMPRESSED_BYTES = 2_147_483_648
 PAGE_SIZE = 256
-DOMAINS = (
-    "observations",
-    "source_claims",
-    "workouts",
-    "metric_priorities",
-    "environment_streams",
-    "environment_buckets",
-    "environment_maintenance",
-)
+
+
+def archive_domains(manifest):
+    return tuple(
+        COMPATIBILITY[
+            (
+                manifest["format_version"],
+                manifest.get("source_schema_version", manifest.get("schema_version")),
+            )
+        ]
+    )
+
+
 ORDER = {
+    "sleep_sessions": "id",
     "observations": "id",
     "source_claims": "id",
     "workouts": "id",
@@ -86,6 +92,11 @@ def snapshot_records(connection, domain: str) -> Iterator[dict]:
     try:
         while rows := cursor.fetchmany(PAGE_SIZE):
             for row in rows:
+                if domain == "sleep_sessions":
+                    from .sleep import archive_session, session_from_row
+
+                    yield archive_session(session_from_row(row))
+                    continue
                 record = dict(row)
                 if "provenance" in record:
                     record["provenance"] = json.loads(record["provenance"])
@@ -111,7 +122,7 @@ def export_archive(
         manifest = {
             "format": "health-assistant",
             "format_version": FORMAT_VERSION,
-            "schema_version": SCHEMA_VERSION,
+            "source_schema_version": SCHEMA_VERSION,
             "created_at": datetime.now(UTC).isoformat(timespec="microseconds"),
             "files": {},
         }
@@ -168,25 +179,16 @@ def export_archive(
 
 
 def validate_manifest(manifest: dict) -> None:
-    if set(manifest) != {
-        "format",
-        "format_version",
-        "schema_version",
-        "created_at",
-        "files",
-    }:
+    version = manifest.get("format_version")
+    if type(version) is not int or version not in (1, 2):
+        raise StoreValidationError("Unsupported archive format version")
+    schema_key = "schema_version" if version == 1 else "source_schema_version"
+    if set(manifest) != {"format", "format_version", schema_key, "created_at", "files"}:
         raise StoreValidationError("Archive manifest fields are invalid")
     if manifest["format"] != "health-assistant":
         raise StoreValidationError("Unsupported archive format")
-    if (
-        type(manifest["format_version"]) is not int
-        or manifest["format_version"] != FORMAT_VERSION
-    ):
-        raise StoreValidationError("Unsupported archive format version")
-    if (
-        type(manifest["schema_version"]) is not int
-        or manifest["schema_version"] != SCHEMA_VERSION
-    ):
+    schema = manifest[schema_key]
+    if type(schema) is not int or (version, schema) not in COMPATIBILITY:
         raise StoreValidationError("Unsupported archive schema version")
     try:
         created = datetime.fromisoformat(manifest["created_at"])
@@ -196,7 +198,7 @@ def validate_manifest(manifest: dict) -> None:
         raise StoreValidationError("Archive creation timestamp is invalid") from err
     files = manifest["files"]
     if not isinstance(files, dict) or set(files) != {
-        f"{domain}.jsonl" for domain in DOMAINS
+        f"{domain}.jsonl" for domain in archive_domains(manifest)
     }:
         raise StoreValidationError("Archive domain files are missing or unsupported")
     total = 0
@@ -268,7 +270,7 @@ def read_archive(path: Path, consume) -> dict:
                 with archive.extractfile(header) as source:
                     manifest = decode_record(source.read(MAX_RECORD_BYTES + 1))
                 validate_manifest(manifest)
-                for domain in DOMAINS:
+                for domain in archive_domains(manifest):
                     filename = f"{domain}.jsonl"
                     header = archive.next()
                     metadata = manifest["files"][filename]
@@ -293,7 +295,21 @@ def read_archive(path: Path, consume) -> dict:
                                     f"Archive domain {domain} has an incomplete record"
                                 )
                             try:
-                                consume(domain, decode_record(data))
+                                record = decode_record(data)
+                                layout = COMPATIBILITY[
+                                    (
+                                        manifest["format_version"],
+                                        manifest.get(
+                                            "source_schema_version",
+                                            manifest.get("schema_version"),
+                                        ),
+                                    )
+                                ]
+                                if set(record) != layout[domain]:
+                                    raise StoreValidationError(
+                                        "Record fields do not match the source format"
+                                    )
+                                consume(domain, record)
                             except StoreValidationError as err:
                                 raise StoreValidationError(
                                     f"Archive domain {domain}, record {count}: {err}"

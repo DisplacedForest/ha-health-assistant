@@ -81,6 +81,10 @@ A provider declares a stable key, a display name, and capabilities (which metric
 
 To add a provider, implement the contract and register it in the integration setup.
 
+Sleep is a separate capability, disabled by default. Declare `sleep_sessions=True` and expose a `sleep_source_ids` frozenset for the explicitly selected accounts. Use `CandidateSleepSession` or `CandidateSleepDeletion` through `async_apply_sleep_changes`. The provider supplies stable identities and ordered revisions; the sink supplies authenticated provider ownership. See [the sleep contract](docs/sleep.md). Do not route sleep through scalar observations.
+
+Sleep's normalization, queries and repository stay independent of Home Assistant. Its source hashes use pinned `rfc8785`, after typed normalization. The frozen JSON vectors were compared with Node's `canonicalize` implementation. The released archive fixture was exported by version 0.2.0 at commit `f15d5885cbf0601f5c8dd8f87a5a834fac9af813`, using synthetic data. Keep its bytes unchanged when extending archive readers.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.

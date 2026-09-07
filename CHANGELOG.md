@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sleep providers can store completed sessions, stages and reported totals without filling gaps or combining overlapping sources. Corrections preserve local exclusions, and ordered deletions prevent older records from returning. This adds the storage and read API foundation; phone connections and the Sleep panel are separate work.
+- Portable history now includes sleep sessions and deletion tombstones. Archives from 0.2 still import without changing existing sleep history.
+
+### Changed
+
+- The database moves to schema 7. Back up before upgrading; rolling back requires matching old integration files and a schema 6 backup.
+
 ## [0.2.0] - 2026-09-06
 
 ### Added

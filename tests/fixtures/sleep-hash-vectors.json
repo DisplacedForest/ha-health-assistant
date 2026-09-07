@@ -1,0 +1,58 @@
+{
+  "python": "3.14.6; rfc8785==0.1.4",
+  "node": "22.23.2; canonicalize==4.0.0",
+  "vectors": [
+    {
+      "input": {
+        "name": "numeric_spellings",
+        "raw_json": "{\"c\":1e0,\"b\":1.0,\"a\":1,\"minus_zero\":-0.0,\"tiny\":1e-7,\"large\":1e21}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "numeric_spellings",
+        "canonical_utf8": "{\"a\":1,\"b\":1,\"c\":1,\"large\":1e+21,\"minus_zero\":0,\"tiny\":1e-7}",
+        "hex": "7b2261223a312c2262223a312c2263223a312c226c61726765223a31652b32312c226d696e75735f7a65726f223a302c2274696e79223a31652d377d",
+        "sha256": "8691e467761ab858771ba22ce7896dde7c78c2b679ed0ca388fa9ab56956f103"
+      }
+    },
+    {
+      "input": {
+        "name": "unicode_utf16_keys",
+        "raw_json": "{\"\\ufb33\":\"last\",\"\\ud83d\\ude00\":\"before-last\",\"\\u20ac\":\"euro\",\"\\u00f6\":\"o\",\"\\u0080\":\"control\",\"1\":\"digit\",\"\\r\":\"first\"}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "unicode_utf16_keys",
+        "canonical_utf8": "{\"\\r\":\"first\",\"1\":\"digit\",\"\":\"control\",\"ö\":\"o\",\"€\":\"euro\",\"😀\":\"before-last\",\"דּ\":\"last\"}",
+        "hex": "7b225c72223a226669727374222c2231223a226469676974222c22c280223a22636f6e74726f6c222c22c3b6223a226f222c22e282ac223a226575726f222c22f09f9880223a226265666f72652d6c617374222c22efacb3223a226c617374227d",
+        "sha256": "2dc967138f1a458bea6884642c3d088207aaeee77023ece84af58621785b67a2"
+      }
+    },
+    {
+      "input": {
+        "name": "unicode_not_nfc",
+        "raw_json": "{\"nfc\":\"é\",\"nfd\":\"e\\u0301\"}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "unicode_not_nfc",
+        "canonical_utf8": "{\"nfc\":\"é\",\"nfd\":\"é\"}",
+        "hex": "7b226e6663223a22c3a9222c226e6664223a2265cc81227d",
+        "sha256": "79eae438d105e852f86ea598ffdda91643386fad0b4f336b941528d30fbf1558"
+      }
+    },
+    {
+      "input": {
+        "name": "sparse_sleep_empty",
+        "raw_json": "{\"hash_scope\": \"health_assistant.sparse_record\", \"hash_version\": 1, \"domain\": \"sleep\", \"identity\": {\"person_id\": \"primary\", \"provider\": \"bridge\", \"source_id\": \"source-example\", \"external_id\": \"record-example\"}, \"record_type\": \"sleep_session\", \"operation\": \"upsert\", \"payload\": {\"started_at\": \"2026-09-07T00:00:00.000000Z\", \"ended_at\": \"2026-09-07T01:00:00.000000Z\", \"start_offset_seconds\": null, \"end_offset_seconds\": null, \"start_zone\": null, \"end_zone\": null, \"reported_totals\": {\"asleep\": null, \"awake\": null, \"light\": null, \"deep\": null, \"rem\": null, \"asleep_unspecified\": null, \"in_bed\": null}, \"stages\": [], \"in_bed_intervals\": [], \"provenance\": {\"source_app\": null, \"source_device\": null, \"algorithm\": null, \"source_version\": null, \"bridge_version\": null, \"source_modified_at\": null, \"native_record_ids\": [], \"provider_confidence\": null}}}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "sparse_sleep_empty",
+        "canonical_utf8": "{\"domain\":\"sleep\",\"hash_scope\":\"health_assistant.sparse_record\",\"hash_version\":1,\"identity\":{\"external_id\":\"record-example\",\"person_id\":\"primary\",\"provider\":\"bridge\",\"source_id\":\"source-example\"},\"operation\":\"upsert\",\"payload\":{\"end_offset_seconds\":null,\"end_zone\":null,\"ended_at\":\"2026-09-07T01:00:00.000000Z\",\"in_bed_intervals\":[],\"provenance\":{\"algorithm\":null,\"bridge_version\":null,\"native_record_ids\":[],\"provider_confidence\":null,\"source_app\":null,\"source_device\":null,\"source_modified_at\":null,\"source_version\":null},\"reported_totals\":{\"asleep\":null,\"asleep_unspecified\":null,\"awake\":null,\"deep\":null,\"in_bed\":null,\"light\":null,\"rem\":null},\"stages\":[],\"start_offset_seconds\":null,\"start_zone\":null,\"started_at\":\"2026-09-07T00:00:00.000000Z\"},\"record_type\":\"sleep_session\"}",
+        "hex": "7b22646f6d61696e223a22736c656570222c22686173685f73636f7065223a226865616c74685f617373697374616e742e7370617273655f7265636f7264222c22686173685f76657273696f6e223a312c226964656e74697479223a7b2265787465726e616c5f6964223a227265636f72642d6578616d706c65222c22706572736f6e5f6964223a227072696d617279222c2270726f7669646572223a22627269646765222c22736f757263655f6964223a22736f757263652d6578616d706c65227d2c226f7065726174696f6e223a22757073657274222c227061796c6f6164223a7b22656e645f6f66667365745f7365636f6e6473223a6e756c6c2c22656e645f7a6f6e65223a6e756c6c2c22656e6465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c22696e5f6265645f696e74657276616c73223a5b5d2c2270726f76656e616e6365223a7b22616c676f726974686d223a6e756c6c2c226272696467655f76657273696f6e223a6e756c6c2c226e61746976655f7265636f72645f696473223a5b5d2c2270726f76696465725f636f6e666964656e6365223a6e756c6c2c22736f757263655f617070223a6e756c6c2c22736f757263655f646576696365223a6e756c6c2c22736f757263655f6d6f6469666965645f6174223a6e756c6c2c22736f757263655f76657273696f6e223a6e756c6c7d2c227265706f727465645f746f74616c73223a7b2261736c656570223a6e756c6c2c2261736c6565705f756e737065636966696564223a6e756c6c2c226177616b65223a6e756c6c2c2264656570223a6e756c6c2c22696e5f626564223a6e756c6c2c226c69676874223a6e756c6c2c2272656d223a6e756c6c7d2c22737461676573223a5b5d2c2273746172745f6f66667365745f7365636f6e6473223a6e756c6c2c2273746172745f7a6f6e65223a6e756c6c2c22737461727465645f6174223a22323032362d30392d30375430303a30303a30302e3030303030305a227d2c227265636f72645f74797065223a22736c6565705f73657373696f6e227d",
+        "sha256": "e1e9ae9cc834f6e7fa014dfbec2bb28ed9739708444771a73e7ae6e6d4eb7109"
+      }
+    }
+  ]
+}

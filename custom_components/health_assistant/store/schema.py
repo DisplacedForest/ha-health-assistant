@@ -4,7 +4,7 @@ import sqlite3
 
 from .errors import StoreVersionError
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -223,6 +223,42 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             )
             """,
             "INSERT INTO environment_maintenance(id) VALUES (1)",
+        ),
+    ),
+    (
+        7,
+        (
+            """
+            CREATE TABLE sleep_sessions (
+                id INTEGER PRIMARY KEY,
+                person_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                source_revision INTEGER NOT NULL,
+                payload_hash TEXT NOT NULL,
+                hash_version INTEGER NOT NULL DEFAULT 1,
+                source_state TEXT NOT NULL,
+                locally_excluded INTEGER NOT NULL DEFAULT 0,
+                first_ingested_at TEXT NOT NULL,
+                last_ingested_at TEXT NOT NULL,
+                started_at TEXT,
+                ended_at TEXT,
+                start_offset_seconds INTEGER,
+                end_offset_seconds INTEGER,
+                start_zone TEXT,
+                end_zone TEXT,
+                reported_totals TEXT,
+                stages TEXT NOT NULL,
+                in_bed_intervals TEXT NOT NULL,
+                provenance TEXT NOT NULL,
+                UNIQUE(provider, source_id, external_id)
+            )
+            """,
+            "CREATE INDEX idx_sleep_query ON sleep_sessions(person_id,source_state,locally_excluded,ended_at,id)",
+            "CREATE INDEX idx_sleep_source_query ON sleep_sessions(person_id,source_id,ended_at,id)",
+            "CREATE TABLE sleep_state (id INTEGER PRIMARY KEY CHECK(id=1), generation INTEGER NOT NULL)",
+            "INSERT INTO sleep_state(id,generation) VALUES(1,0)",
         ),
     ),
 )

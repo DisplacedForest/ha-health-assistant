@@ -101,7 +101,7 @@ Twelve continuously recorded streams budget about 79.31 MB after two years, plus
 
 Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups and portable history archives include retained environmental records, coverage and area metadata. A database backup restores the whole store; a portable import merges its history.
 
-This build moves the database to schema 6. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
+This build moves the database to schema 7. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
 
 ## Getting data in
 
@@ -249,11 +249,11 @@ data:
   dry_run: true
 ```
 
-The response lists record counts, date coverage, sources and expected changes. Dry run is on by default. Check the response, create a database backup, then call the same action with `dry_run: false` to merge the history. Repeating the same import won't duplicate it. If an import stops partway through, retry the same archive. Priorities and readings commit together; completed workout and environmental batches stay committed. Large health imports can delay incoming readings while that transaction finishes. Writes that arrive during an import can make the applied counts differ from the preview.
+The response lists record counts, date coverage, sources and expected changes. Dry run is on by default. Check the response, create a database backup, then call the same action with `dry_run: false` to merge the history. Repeating the same import won't duplicate it. If an import stops partway through, retry the same archive. Priorities and readings commit together; completed workout, environmental and sleep batches stay committed. Large health imports can delay incoming readings while that transaction finishes. Writes that arrive during an import can make the applied counts differ from the preview.
 
 Imports include source priorities and can change which source supplies a current value. Excluded readings stay excluded, including readings excluded on the destination. A newer local version of the same source record wins over an older archive. Environmental history retains its source and area identities; imports do not configure live sensors or restore provider accounts. Set those up separately. Room metadata describes sensor context, not your personal exposure.
 
-The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams and retained buckets. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
+The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams, retained buckets and revisioned sleep sessions. Format 1 archives from 0.2 remain importable and leave existing sleep history unchanged. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
 
 See the [archive format and merge rules](docs/interchange-format.md) for fields, limits and recovery details. Use a SQLite backup below to restore the health store exactly, or a Home Assistant backup to restore the configuration as well.
 
@@ -279,6 +279,18 @@ Keep a database backup before upgrading, importing history or changing an existi
 4. Start Home Assistant (or reload the entry). The restored data appears immediately.
 
 If the database ever fails to open (corruption, or a file written by a newer version), Health Assistant refuses to start, raises a repair issue explaining what happened, and leaves the file exactly as it found it. It never resets your data to recover itself.
+
+## Sleep history
+
+The store can retain completed sleep sessions from a provider that explicitly supports sleep. This is the storage and API foundation. Existing sensor mappings do not start recording sleep, and this change does not add a phone connection or a Sleep panel.
+
+Each source keeps its own sessions, stage intervals and reported totals. Overlapping source records stay separate. Gaps and unknown stages remain visible; partial stage coverage is never presented as a full night's sleep. In-bed context is kept separately from sleep stages. A source's reported total can disagree with its intervals, and both values are retained.
+
+Corrections replace the source's current session at a higher revision. Local exclusion stays in place across corrections and archive imports. An explicit source deletion removes the current payload and leaves a small tombstone to prevent stale replays. Restoring an exclusion cannot undo a source deletion. Previously exported files and backups can still contain the old payload.
+
+Sessions must have explicit timestamp offsets, last at most 48 hours and have finished before ingestion. There are limits of 4,096 stages, 4,096 in-bed intervals, 512 KiB per normalized payload and 64 KiB of source metadata. Source timezone information is optional. UTC normalization does not tell us which local night a session belongs to.
+
+Back up the schema 6 database before upgrading. To roll back, restore matching old integration files and the old database. See [sleep provider and API guidance](docs/sleep.md) for the internal write contract and bounded read commands.
 
 ## Development
 

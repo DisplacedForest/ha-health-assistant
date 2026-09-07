@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 from .db import HealthDatabase
 from .errors import StoreValidationError
-from .interchange_archive import DOMAINS, MAX_COMPRESSED_BYTES, export_archive
+from .interchange_archive import MAX_COMPRESSED_BYTES, archive_domains, export_archive
 from .interchange_replay import replay_archive
 from .interchange_staging import validate_archive
 
@@ -74,7 +74,7 @@ def import_archive(
 
 
 def _summary(staging, manifest):
-    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams"
+    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams UNION SELECT provider FROM sleep_sessions"
     sources = [
         row["source"]
         for row in staging.execute(
@@ -84,7 +84,7 @@ def _summary(staging, manifest):
     source_count = staging.execute(f"SELECT count(*) AS count FROM ({sources_sql})")[0][
         "count"
     ]
-    times_sql = "SELECT observed_at AS first, observed_at AS last FROM source_claims UNION ALL SELECT started_at, ended_at FROM workouts"
+    times_sql = "SELECT observed_at AS first, observed_at AS last FROM source_claims UNION ALL SELECT started_at, ended_at FROM workouts UNION ALL SELECT started_at, ended_at FROM sleep_sessions WHERE source_state='active'"
     span = staging.execute(
         f"SELECT min(first) AS first, max(last) AS last FROM ({times_sql})"
     )[0]
@@ -106,7 +106,7 @@ def _summary(staging, manifest):
         "archive_created_at": manifest["created_at"],
         "records": {
             domain: manifest["files"][f"{domain}.jsonl"]["records"]
-            for domain in DOMAINS
+            for domain in archive_domains(manifest)
         },
         "date_span": {"first": first, "last": last},
         "sources": sources,

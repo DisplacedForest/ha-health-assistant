@@ -8,6 +8,8 @@ from homeassistant.util import dt as dt_util
 
 from ..signals import SIGNAL_HEALTH_DATA_UPDATED
 from ..store import HealthObservation, HealthRepository, MetricType, Workout
+from ..store.sleep import SleepRepository, archive_session
+from ..store.sleep_models import SleepError, candidate_session, canonical
 from ..store.units import canonical_unit, convert
 from .contract import (
     CandidateObservation,
@@ -97,3 +99,44 @@ class ProviderSink:
         self._on_result(self._provider.key, None)
         async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
         return stored
+
+    async def async_apply_sleep_changes(self, changes, checkpoint=None):
+        self._require_import()
+        if not self._provider.capabilities.sleep_sessions:
+            raise ProviderCapabilityError("Provider does not declare sleep capability")
+        try:
+            if not isinstance(changes, (list, tuple)) or len(changes) > 100:
+                raise SleepError("sleep_batch_limit")
+            if any(
+                getattr(change, "source_id", None)
+                not in self._provider.sleep_source_ids
+                for change in changes
+            ):
+                raise SleepError("sleep_source_not_allowed")
+            provider = self._provider.key
+
+            def apply():
+                now = dt_util.utcnow()
+                normalized = []
+                size = 0
+                for change in changes:
+                    session = candidate_session(provider, change, now)
+                    size += len(canonical(archive_session(session), 532480))
+                    if size > 8 * 1024 * 1024:
+                        raise SleepError("sleep_batch_limit")
+                    normalized.append(session)
+                return SleepRepository(
+                    self._repository._db, clock=lambda: now
+                ).apply_sleep_changes(
+                    normalized,
+                    (provider, checkpoint) if checkpoint is not None else None,
+                )
+
+            results = await self._hass.async_add_executor_job(apply)
+        except SleepError as err:
+            self._on_result(self._provider.key, err.code)
+            raise
+        if any(result.changed for result in results):
+            self._on_result(self._provider.key, None)
+            async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
+        return results

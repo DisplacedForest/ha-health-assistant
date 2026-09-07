@@ -29,6 +29,14 @@ from .reconciliation import (
     values_close,
 )
 from .repository import HealthRepository
+from .sleep import SleepRepository
+from .sleep_models import (
+    CandidateSleepDeletion,
+    CandidateSleepSession,
+    SleepChangeResult,
+    SleepSession,
+    SleepStageInterval,
+)
 
 __all__ = [
     "BODY_MEASUREMENT_METRICS",
@@ -37,6 +45,8 @@ __all__ = [
     "DEFAULT_PERSON_ID",
     "RECONCILIATION_RULES",
     "BodyMeasurement",
+    "CandidateSleepDeletion",
+    "CandidateSleepSession",
     "DailyActivity",
     "HealthDatabase",
     "HealthObservation",
@@ -45,6 +55,10 @@ __all__ = [
     "MetricType",
     "ReconciliationRule",
     "RecordStatus",
+    "SleepChangeResult",
+    "SleepRepository",
+    "SleepSession",
+    "SleepStageInterval",
     "SourceClaim",
     "StoreCorruptError",
     "StoreError",
