@@ -98,3 +98,68 @@ async def test_sleep_batch_conflict_has_no_dispatch_or_cursor(
     assert not changed.called
     assert repository.get_provider_state(provider.key) == {"cursor": "before"}
     unsubscribe()
+
+
+class MultiAccountSleepProvider(SleepProvider):
+    @property
+    def sleep_source_ids(self):
+        return frozenset(("selected-account", "second-account"))
+
+
+async def test_sleep_account_failure_survives_other_account_and_scalar_success(
+    hass, registry
+):
+    from common import weight_candidate
+
+    from custom_components.health_assistant.store import MetricType
+
+    provider = MultiAccountSleepProvider(
+        capabilities=ProviderCapabilities(
+            sleep_sessions=True, metrics=frozenset((MetricType.WEIGHT,))
+        )
+    )
+    registry.register(provider)
+    sink = registry.sink(provider.key)
+    await sink.async_apply_sleep_changes([candidate()])
+    with pytest.raises(SleepError, match="revision_conflict"):
+        await sink.async_apply_sleep_changes(
+            [replace(candidate(), reported_totals={"asleep": 0})]
+        )
+    assert registry.status(provider.key, "selected-account").degraded
+    assert not registry.status(provider.key, "second-account").degraded
+    await sink.async_apply_sleep_changes(
+        [replace(candidate(), source_id="second-account")]
+    )
+    await sink.async_add_observation(weight_candidate())
+    await registry.async_sync(provider.key)
+    assert registry.status(provider.key, "selected-account").degraded
+    assert not registry.status(provider.key, "second-account").degraded
+    assert registry.status(provider.key).degraded
+    assert registry.statuses[provider.key].degraded
+    await sink.async_apply_sleep_changes([candidate(revision=2)])
+    assert not registry.status(provider.key, "selected-account").degraded
+    assert not registry.status(provider.key).degraded
+    assert (
+        registry.status(provider.key, "selected-account").last_error
+        == "revision_conflict"
+    )
+
+
+async def test_sleep_poll_conflict_keeps_source_status_without_adapter_error(
+    hass, registry
+):
+    async def sync(sink, _state):
+        await sink.async_apply_sleep_changes(
+            [replace(candidate(), reported_totals={"asleep": 0})]
+        )
+
+    provider = MultiAccountSleepProvider(
+        capabilities=ProviderCapabilities(sleep_sessions=True), sync=sync
+    )
+    registry.register(provider)
+    await registry.sink(provider.key).async_apply_sleep_changes([candidate()])
+    await registry.async_sync(provider.key)
+    assert registry.status(provider.key, "selected-account").degraded
+    assert not registry.status(provider.key, "second-account").degraded
+    await registry.sink(provider.key).async_apply_sleep_changes([candidate(revision=2)])
+    assert not registry.status(provider.key).degraded

@@ -191,7 +191,9 @@ class SleepRepository:
         exclusion_changed = False
         if existing:
             if existing.person_id != incoming.person_id:
-                raise SleepError("sleep_identity_conflict")
+                raise SleepError(
+                    "sleep_identity_conflict", source_id=incoming.source_id
+                )
             exclusion_changed = (
                 merge_exclusions
                 and incoming.locally_excluded
@@ -202,7 +204,7 @@ class SleepRepository:
                     incoming.source_revision == existing.source_revision
                     and incoming.payload_hash != existing.payload_hash
                 ):
-                    raise SleepError("revision_conflict")
+                    raise SleepError("revision_conflict", source_id=incoming.source_id)
                 if exclusion_changed:
                     self.database.execute(
                         "UPDATE sleep_sessions SET locally_excluded=1 WHERE id=?",

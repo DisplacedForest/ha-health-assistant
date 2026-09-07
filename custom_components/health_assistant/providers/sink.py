@@ -26,11 +26,15 @@ class ProviderSink:
         repository: HealthRepository,
         provider: HealthProvider,
         on_result: Callable[[str, str | None], None],
+        on_sleep_result: Callable[[str, str, str | None], None] | None = None,
     ) -> None:
         self._hass = hass
         self._repository = repository
         self._provider = provider
         self._on_result = on_result
+        self._on_sleep_result = on_sleep_result or (
+            lambda key, _source, error: on_result(key, error)
+        )
 
     def _require_import(self) -> None:
         if not self._provider.capabilities.can_import:
@@ -134,9 +138,16 @@ class ProviderSink:
 
             results = await self._hass.async_add_executor_job(apply)
         except SleepError as err:
-            self._on_result(self._provider.key, err.code)
+            if err.source_id in self._provider.sleep_source_ids:
+                self._on_sleep_result(self._provider.key, err.source_id, err.code)
+            else:
+                self._on_result(self._provider.key, err.code)
             raise
         if any(result.changed for result in results):
+            for source_id in {
+                result.session.source_id for result in results if result.changed
+            }:
+                self._on_sleep_result(self._provider.key, source_id, None)
             self._on_result(self._provider.key, None)
             async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
         return results

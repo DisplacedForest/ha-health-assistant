@@ -53,8 +53,9 @@ PAYLOAD_FIELDS = (
 
 
 class SleepError(StoreValidationError):
-    def __init__(self, code="invalid_sleep"):
+    def __init__(self, code="invalid_sleep", *, source_id=None):
         self.code = code
+        self.source_id = source_id
         super().__init__(code)
 
 
@@ -409,12 +410,16 @@ def candidate_session(provider, candidate, now):
         if isinstance(candidate, CandidateSleepSession)
         else {}
     )
-    return normalized_session(
-        provider,
-        candidate.source_id,
-        candidate.external_id,
-        candidate.source_revision,
-        data if isinstance(candidate, CandidateSleepSession) else None,
-        now,
-        person_id=candidate.person_id,
-    )
+    try:
+        return normalized_session(
+            provider,
+            candidate.source_id,
+            candidate.external_id,
+            candidate.source_revision,
+            data if isinstance(candidate, CandidateSleepSession) else None,
+            now,
+            person_id=candidate.person_id,
+        )
+    except SleepError as err:
+        err.source_id = candidate.source_id
+        raise
