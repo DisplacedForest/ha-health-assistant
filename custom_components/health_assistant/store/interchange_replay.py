@@ -153,6 +153,7 @@ def replay_archive(staging, target, after_batch=None):
             ),
         )
     _replay_sleep(staging, target, counts, after_batch)
+    _replay_recovery(staging, target, counts, after_batch)
     return counts
 
 
@@ -305,6 +306,44 @@ def _apply_sleep_batch(repository, batch, counts):
     results = repository.apply_sleep_changes(batch, merge_exclusions=True)
     domain = counts.setdefault(
         "sleep_sessions",
+        dict.fromkeys(
+            ("create", "update", "stale", "unchanged", "deleted", "exclusion_change"), 0
+        ),
+    )
+    for result in results:
+        domain["stale" if result.action == "stale_revision" else result.action] += 1
+        domain["exclusion_change"] += int(result.exclusion_changed)
+
+
+def _replay_recovery(staging, target, counts, after_batch):
+    from .recovery import RecoveryRepository, observation_from_row
+
+    repository = RecoveryRepository(target)
+    batch = []
+    size = 0
+    for row in rows_by_id(staging, "recovery_records"):
+        record_size = sum(
+            len(value.encode("utf-8"))
+            for value in row.values()
+            if isinstance(value, str)
+        )
+        if len(batch) == 100 or size + record_size > 900 * 1024:
+            _apply_recovery_batch(repository, batch, counts)
+            if after_batch:
+                after_batch("recovery_records")
+            batch, size = [], 0
+        batch.append(observation_from_row(row))
+        size += record_size
+    if batch:
+        _apply_recovery_batch(repository, batch, counts)
+        if after_batch:
+            after_batch("recovery_records")
+
+
+def _apply_recovery_batch(repository, batch, counts):
+    results = repository.apply_recovery_changes(batch, merge_exclusions=True)
+    domain = counts.setdefault(
+        "recovery_records",
         dict.fromkeys(
             ("create", "update", "stale", "unchanged", "deleted", "exclusion_change"), 0
         ),

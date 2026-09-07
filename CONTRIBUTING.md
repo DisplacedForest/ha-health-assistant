@@ -71,7 +71,7 @@ If you run an actual Home Assistant and want the working tree installed next to 
 mise run install-dev
 ```
 
-This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. Use a HACS or manual release install for the production copy.
+This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. Use a HACS or manual release install for the production copy. The dev installer changes the Home Assistant component domain and display name while preserving fixed sparse protocol namespaces, so sleep and recovery hashes and portable archives remain compatible.
 
 ## Providers
 
@@ -84,6 +84,8 @@ To add a provider, implement the contract and register it in the integration set
 Sleep is a separate capability, disabled by default. Declare `sleep_sessions=True` and expose a `sleep_source_ids` frozenset for the explicitly selected accounts. Use `CandidateSleepSession` or `CandidateSleepDeletion` through `async_apply_sleep_changes`. The provider supplies stable identities and ordered revisions; the sink supplies authenticated provider ownership. See [the sleep contract](docs/sleep.md). Do not route sleep through scalar observations.
 
 Sleep's normalization, queries and repository stay independent of Home Assistant. Its source hashes use pinned `rfc8785`, after typed normalization. The frozen JSON vectors were compared with Node's `canonicalize` implementation. The released archive fixture was exported by version 0.2.0 at commit `f15d5885cbf0601f5c8dd8f87a5a834fac9af813`, using synthetic data. Keep its bytes unchanged when extending archive readers.
+
+Recovery follows the same revision boundary with `CandidateRecoveryObservation` and `CandidateRecoveryDeletion`. Declare `recovery_metrics` and explicitly selected `recovery_source_ids`; both default to empty. Use `async_apply_recovery_changes`, keeping HRV methods, contexts and algorithm versions separate. See [the recovery contract](docs/recovery.md). Baseline calculations belong to the shared derived layer.
 
 ## Branch and PR flow
 

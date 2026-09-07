@@ -1,0 +1,64 @@
+{
+  "status": "verified_cross_language_synthetic_vectors_not_provider_evidence",
+  "python": "3.14.6; rfc8785==0.1.4",
+  "node": "22.23.2; canonicalize==4.0.0",
+  "vectors": [
+    {
+      "input": {
+        "name": "sparse_recovery",
+        "raw_json": "{\"hash_scope\": \"health_assistant.sparse_record\", \"hash_version\": 1, \"domain\": \"recovery\", \"identity\": {\"person_id\": \"primary\", \"provider\": \"bridge\", \"source_id\": \"source-example\", \"external_id\": \"record-example\"}, \"record_type\": \"hrv_sdnn\", \"operation\": \"upsert\", \"payload\": {\"algorithm_id\": null, \"algorithm_version\": null, \"context\": \"unknown\", \"started_at\": \"2026-09-07T01:00:00.000000Z\", \"ended_at\": \"2026-09-07T01:00:00.000000Z\", \"start_offset_seconds\": null, \"end_offset_seconds\": null, \"start_zone\": null, \"end_zone\": null, \"value\": 50, \"unit\": \"ms\", \"provenance\": {\"source_app\": null, \"source_device\": null, \"source_version\": null, \"bridge_version\": null, \"source_modified_at\": null, \"raw_value\": null, \"raw_unit\": null}}}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "sparse_recovery",
+        "canonical_utf8": "{\"domain\":\"recovery\",\"hash_scope\":\"health_assistant.sparse_record\",\"hash_version\":1,\"identity\":{\"external_id\":\"record-example\",\"person_id\":\"primary\",\"provider\":\"bridge\",\"source_id\":\"source-example\"},\"operation\":\"upsert\",\"payload\":{\"algorithm_id\":null,\"algorithm_version\":null,\"context\":\"unknown\",\"end_offset_seconds\":null,\"end_zone\":null,\"ended_at\":\"2026-09-07T01:00:00.000000Z\",\"provenance\":{\"bridge_version\":null,\"raw_unit\":null,\"raw_value\":null,\"source_app\":null,\"source_device\":null,\"source_modified_at\":null,\"source_version\":null},\"start_offset_seconds\":null,\"start_zone\":null,\"started_at\":\"2026-09-07T01:00:00.000000Z\",\"unit\":\"ms\",\"value\":50},\"record_type\":\"hrv_sdnn\"}",
+        "hex": "7b22646f6d61696e223a227265636f76657279222c22686173685f73636f7065223a226865616c74685f617373697374616e742e7370617273655f7265636f7264222c22686173685f76657273696f6e223a312c226964656e74697479223a7b2265787465726e616c5f6964223a227265636f72642d6578616d706c65222c22706572736f6e5f6964223a227072696d617279222c2270726f7669646572223a22627269646765222c22736f757263655f6964223a22736f757263652d6578616d706c65227d2c226f7065726174696f6e223a22757073657274222c227061796c6f6164223a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74657874223a22756e6b6e6f776e222c22656e645f6f66667365745f7365636f6e6473223a6e756c6c2c22656e645f7a6f6e65223a6e756c6c2c22656e6465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c2270726f76656e616e6365223a7b226272696467655f76657273696f6e223a6e756c6c2c227261775f756e6974223a6e756c6c2c227261775f76616c7565223a6e756c6c2c22736f757263655f617070223a6e756c6c2c22736f757263655f646576696365223a6e756c6c2c22736f757263655f6d6f6469666965645f6174223a6e756c6c2c22736f757263655f76657273696f6e223a6e756c6c7d2c2273746172745f6f66667365745f7365636f6e6473223a6e756c6c2c2273746172745f7a6f6e65223a6e756c6c2c22737461727465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c22756e6974223a226d73222c2276616c7565223a35307d2c227265636f72645f74797065223a226872765f73646e6e227d",
+        "sha256": "cc52a8c0d536cfe7fe9a4a78ec43741fe7649153faaf4b35a88b9057dd6bf3be"
+      }
+    },
+    {
+      "input": {
+        "name": "sparse_delete",
+        "raw_json": "{\"hash_scope\": \"health_assistant.sparse_record\", \"hash_version\": 1, \"domain\": \"recovery\", \"identity\": {\"person_id\": \"primary\", \"provider\": \"bridge\", \"source_id\": \"source-example\", \"external_id\": \"record-example\"}, \"record_type\": \"hrv_sdnn\", \"operation\": \"delete\", \"payload\": null}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "sparse_delete",
+        "canonical_utf8": "{\"domain\":\"recovery\",\"hash_scope\":\"health_assistant.sparse_record\",\"hash_version\":1,\"identity\":{\"external_id\":\"record-example\",\"person_id\":\"primary\",\"provider\":\"bridge\",\"source_id\":\"source-example\"},\"operation\":\"delete\",\"payload\":null,\"record_type\":\"hrv_sdnn\"}",
+        "hex": "7b22646f6d61696e223a227265636f76657279222c22686173685f73636f7065223a226865616c74685f617373697374616e742e7370617273655f7265636f7264222c22686173685f76657273696f6e223a312c226964656e74697479223a7b2265787465726e616c5f6964223a227265636f72642d6578616d706c65222c22706572736f6e5f6964223a227072696d617279222c2270726f7669646572223a22627269646765222c22736f757263655f6964223a22736f757263652d6578616d706c65227d2c226f7065726174696f6e223a2264656c657465222c227061796c6f6164223a6e756c6c2c227265636f72645f74797065223a226872765f73646e6e227d",
+        "sha256": "bb371a235a4572b1310172f3c8235c95aebb437eda51ad3c9812a6b7e1e1bd1e"
+      }
+    },
+    {
+      "input": {
+        "name": "recovery_raw_seconds",
+        "raw_json": "{\"hash_scope\": \"health_assistant.sparse_record\", \"hash_version\": 1, \"domain\": \"recovery\", \"identity\": {\"person_id\": \"primary\", \"provider\": \"bridge\", \"source_id\": \"source-example\", \"external_id\": \"record-example\"}, \"record_type\": \"hrv_sdnn\", \"operation\": \"upsert\", \"payload\": {\"algorithm_id\": null, \"algorithm_version\": null, \"context\": \"unknown\", \"started_at\": \"2026-09-07T01:00:00.000000Z\", \"ended_at\": \"2026-09-07T01:00:00.000000Z\", \"start_offset_seconds\": null, \"end_offset_seconds\": null, \"start_zone\": null, \"end_zone\": null, \"value\": 50, \"unit\": \"ms\", \"provenance\": {\"source_app\": null, \"source_device\": null, \"source_version\": null, \"bridge_version\": null, \"source_modified_at\": null, \"raw_value\": 0.05, \"raw_unit\": \"s\"}}}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "recovery_raw_seconds",
+        "canonical_utf8": "{\"domain\":\"recovery\",\"hash_scope\":\"health_assistant.sparse_record\",\"hash_version\":1,\"identity\":{\"external_id\":\"record-example\",\"person_id\":\"primary\",\"provider\":\"bridge\",\"source_id\":\"source-example\"},\"operation\":\"upsert\",\"payload\":{\"algorithm_id\":null,\"algorithm_version\":null,\"context\":\"unknown\",\"end_offset_seconds\":null,\"end_zone\":null,\"ended_at\":\"2026-09-07T01:00:00.000000Z\",\"provenance\":{\"bridge_version\":null,\"raw_unit\":\"s\",\"raw_value\":0.05,\"source_app\":null,\"source_device\":null,\"source_modified_at\":null,\"source_version\":null},\"start_offset_seconds\":null,\"start_zone\":null,\"started_at\":\"2026-09-07T01:00:00.000000Z\",\"unit\":\"ms\",\"value\":50},\"record_type\":\"hrv_sdnn\"}",
+        "hex": "7b22646f6d61696e223a227265636f76657279222c22686173685f73636f7065223a226865616c74685f617373697374616e742e7370617273655f7265636f7264222c22686173685f76657273696f6e223a312c226964656e74697479223a7b2265787465726e616c5f6964223a227265636f72642d6578616d706c65222c22706572736f6e5f6964223a227072696d617279222c2270726f7669646572223a22627269646765222c22736f757263655f6964223a22736f757263652d6578616d706c65227d2c226f7065726174696f6e223a22757073657274222c227061796c6f6164223a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74657874223a22756e6b6e6f776e222c22656e645f6f66667365745f7365636f6e6473223a6e756c6c2c22656e645f7a6f6e65223a6e756c6c2c22656e6465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c2270726f76656e616e6365223a7b226272696467655f76657273696f6e223a6e756c6c2c227261775f756e6974223a2273222c227261775f76616c7565223a302e30352c22736f757263655f617070223a6e756c6c2c22736f757263655f646576696365223a6e756c6c2c22736f757263655f6d6f6469666965645f6174223a6e756c6c2c22736f757263655f76657273696f6e223a6e756c6c7d2c2273746172745f6f66667365745f7365636f6e6473223a6e756c6c2c2273746172745f7a6f6e65223a6e756c6c2c22737461727465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c22756e6974223a226d73222c2276616c7565223a35307d2c227265636f72645f74797065223a226872765f73646e6e227d",
+        "sha256": "e452ee4678d619dfef18b7c4b9038af8bc98b634983d3873b09ea81256d3c4d4"
+      }
+    },
+    {
+      "input": {
+        "name": "recovery_raw_milliseconds",
+        "raw_json": "{\"hash_scope\": \"health_assistant.sparse_record\", \"hash_version\": 1, \"domain\": \"recovery\", \"identity\": {\"person_id\": \"primary\", \"provider\": \"bridge\", \"source_id\": \"source-example\", \"external_id\": \"record-example\"}, \"record_type\": \"hrv_sdnn\", \"operation\": \"upsert\", \"payload\": {\"algorithm_id\": null, \"algorithm_version\": null, \"context\": \"unknown\", \"started_at\": \"2026-09-07T01:00:00.000000Z\", \"ended_at\": \"2026-09-07T01:00:00.000000Z\", \"start_offset_seconds\": null, \"end_offset_seconds\": null, \"start_zone\": null, \"end_zone\": null, \"value\": 50, \"unit\": \"ms\", \"provenance\": {\"source_app\": null, \"source_device\": null, \"source_version\": null, \"bridge_version\": null, \"source_modified_at\": null, \"raw_value\": 50, \"raw_unit\": \"ms\"}}}",
+        "normalize": "none"
+      },
+      "verified": {
+        "name": "recovery_raw_milliseconds",
+        "canonical_utf8": "{\"domain\":\"recovery\",\"hash_scope\":\"health_assistant.sparse_record\",\"hash_version\":1,\"identity\":{\"external_id\":\"record-example\",\"person_id\":\"primary\",\"provider\":\"bridge\",\"source_id\":\"source-example\"},\"operation\":\"upsert\",\"payload\":{\"algorithm_id\":null,\"algorithm_version\":null,\"context\":\"unknown\",\"end_offset_seconds\":null,\"end_zone\":null,\"ended_at\":\"2026-09-07T01:00:00.000000Z\",\"provenance\":{\"bridge_version\":null,\"raw_unit\":\"ms\",\"raw_value\":50,\"source_app\":null,\"source_device\":null,\"source_modified_at\":null,\"source_version\":null},\"start_offset_seconds\":null,\"start_zone\":null,\"started_at\":\"2026-09-07T01:00:00.000000Z\",\"unit\":\"ms\",\"value\":50},\"record_type\":\"hrv_sdnn\"}",
+        "hex": "7b22646f6d61696e223a227265636f76657279222c22686173685f73636f7065223a226865616c74685f617373697374616e742e7370617273655f7265636f7264222c22686173685f76657273696f6e223a312c226964656e74697479223a7b2265787465726e616c5f6964223a227265636f72642d6578616d706c65222c22706572736f6e5f6964223a227072696d617279222c2270726f7669646572223a22627269646765222c22736f757263655f6964223a22736f757263652d6578616d706c65227d2c226f7065726174696f6e223a22757073657274222c227061796c6f6164223a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74657874223a22756e6b6e6f776e222c22656e645f6f66667365745f7365636f6e6473223a6e756c6c2c22656e645f7a6f6e65223a6e756c6c2c22656e6465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c2270726f76656e616e6365223a7b226272696467655f76657273696f6e223a6e756c6c2c227261775f756e6974223a226d73222c227261775f76616c7565223a35302c22736f757263655f617070223a6e756c6c2c22736f757263655f646576696365223a6e756c6c2c22736f757263655f6d6f6469666965645f6174223a6e756c6c2c22736f757263655f76657273696f6e223a6e756c6c7d2c2273746172745f6f66667365745f7365636f6e6473223a6e756c6c2c2273746172745f7a6f6e65223a6e756c6c2c22737461727465645f6174223a22323032362d30392d30375430313a30303a30302e3030303030305a222c22756e6974223a226d73222c2276616c7565223a35307d2c227265636f72645f74797065223a226872765f73646e6e227d",
+        "sha256": "a609a61b8b6e244545257f84c37e3fbc94e70d6be72c8e8002fe1ab6ba61225b"
+      }
+    }
+  ],
+  "invalid_values_rejected_in_both": [
+    "NaN",
+    "Infinity",
+    "lone_surrogate"
+  ]
+}

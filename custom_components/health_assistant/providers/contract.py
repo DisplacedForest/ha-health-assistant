@@ -24,6 +24,7 @@ class ProviderCapabilities:
     metrics: frozenset[MetricType] = frozenset()
     workouts: bool = False
     sleep_sessions: bool = False
+    recovery_metrics: frozenset[str] = frozenset()
     can_import: bool = True
     can_export: bool = False
 
@@ -75,6 +76,10 @@ class HealthProvider(ABC):
 
     @property
     def sleep_source_ids(self) -> frozenset[str]:
+        return frozenset()
+
+    @property
+    def recovery_source_ids(self) -> frozenset[str]:
         return frozenset()
 
     @property

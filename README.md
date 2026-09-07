@@ -101,7 +101,7 @@ Twelve continuously recorded streams budget about 79.31 MB after two years, plus
 
 Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups and portable history archives include retained environmental records, coverage and area metadata. A database backup restores the whole store; a portable import merges its history.
 
-This build moves the database to schema 7. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
+This build moves the database to schema 8. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
 
 ## Getting data in
 
@@ -249,11 +249,11 @@ data:
   dry_run: true
 ```
 
-The response lists record counts, date coverage, sources and expected changes. Dry run is on by default. Check the response, create a database backup, then call the same action with `dry_run: false` to merge the history. Repeating the same import won't duplicate it. If an import stops partway through, retry the same archive. Priorities and readings commit together; completed workout, environmental and sleep batches stay committed. Large health imports can delay incoming readings while that transaction finishes. Writes that arrive during an import can make the applied counts differ from the preview.
+The response lists record counts, date coverage, sources and expected changes. Dry run is on by default. Check the response, create a database backup, then call the same action with `dry_run: false` to merge the history. Repeating the same import won't duplicate it. If an import stops partway through, retry the same archive. Priorities and readings commit together; completed workout, environmental, sleep and recovery batches stay committed. Large health imports can delay incoming readings while that transaction finishes. Writes that arrive during an import can make the applied counts differ from the preview.
 
 Imports include source priorities and can change which source supplies a current value. Excluded readings stay excluded, including readings excluded on the destination. A newer local version of the same source record wins over an older archive. Environmental history retains its source and area identities; imports do not configure live sensors or restore provider accounts. Set those up separately. Room metadata describes sensor context, not your personal exposure.
 
-The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams, retained buckets and revisioned sleep sessions. Format 1 archives from 0.2 remain importable and leave existing sleep history unchanged. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
+The archive contains canonical observations and their source claims, workouts with stored exercise sets, provenance, exclusions, priorities, environmental streams, retained buckets and revisioned sleep sessions and recovery observations. Format 1 archives from 0.2 and format 2/schema 7 archives remain importable and leave later domains unchanged. It does not contain integration credentials, provider sync state or Home Assistant configuration. Old environmental detail that has already been rolled into hourly history is not recreated by replaying an older archive. Normal retention still applies after import.
 
 See the [archive format and merge rules](docs/interchange-format.md) for fields, limits and recovery details. Use a SQLite backup below to restore the health store exactly, or a Home Assistant backup to restore the configuration as well.
 
@@ -299,3 +299,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and the pull request 
 ## License
 
 [MIT](LICENSE)
+
+## Recovery history
+
+The store now supports resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate from explicitly authorized providers. Measurements retain their source, method, measurement window and context. Unknown context stays unknown, and different HRV methods or algorithms are never combined. This adds storage and bounded read APIs; phone connections, baseline calculations and the Recovery panel are separate work.
+
+Corrections replace complete source payloads while preserving local exclusions. Ordered deletion tombstones prevent older records from returning. Portable history includes recovery records and tombstones without reconnecting their sources. Existing scalar readings and Overview calculations are unchanged. See [recovery provider and API guidance](docs/recovery.md) for supported units, comparison-series keys and administrator exclusion.

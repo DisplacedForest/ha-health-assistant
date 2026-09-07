@@ -33,9 +33,17 @@ def validate_archive(path: Path, staging_path: Path):
 
                 now = datetime.now(UTC)
                 value = session_columns(parse_archive_session(record, now), now)
+            elif domain == "recovery_records":
+                from .recovery import observation_columns, parse_archive_observation
+
+                now = datetime.now(UTC)
+                value = observation_columns(parse_archive_observation(record, now), now)
             else:
                 value = validate_record(domain, record)
-            if "provenance" in value and domain != "sleep_sessions":
+            if "provenance" in value and domain not in (
+                "sleep_sessions",
+                "recovery_records",
+            ):
                 value["provenance"] = json.dumps(
                     value["provenance"],
                     sort_keys=True,

@@ -22,6 +22,7 @@ def _collect_provider_facts(registry: ProviderRegistry) -> dict[str, Any]:
                 "metrics": sorted(metric.value for metric in capabilities.metrics),
                 "workouts": capabilities.workouts,
                 "sleep_sessions": capabilities.sleep_sessions,
+                "recovery_metrics": sorted(capabilities.recovery_metrics),
                 "can_import": capabilities.can_import,
                 "can_export": capabilities.can_export,
             },
@@ -75,6 +76,9 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
         },
         "claim_counts": {str(row["metric"]): int(row["n"]) for row in claim_counts},
         "workout_count": int(workout_count[0]["n"]),
+        "recovery_count": database.execute("SELECT count(*) FROM recovery_records")[0][
+            0
+        ],
         "sleep_count": database.execute("SELECT count(*) FROM sleep_sessions")[0][0],
         "observation_providers": {
             str(row["provider"]): int(row["n"]) for row in observation_providers

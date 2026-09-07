@@ -13,6 +13,7 @@ from .body import build_body, workout_detail
 from .const import DOMAIN
 from .coordinator import HealthSummary
 from .overview import build_overview, reading_payload
+from .recovery_websocket import async_register_recovery_websocket
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
 from .sleep_websocket import async_register_sleep_websocket
 from .store import (
@@ -310,6 +311,7 @@ async def ws_observation_exclusion(hass, connection, msg) -> None:
 @callback
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     async_register_sleep_websocket(hass)
+    async_register_recovery_websocket(hass)
     websocket_api.async_register_command(hass, ws_summary)
     websocket_api.async_register_command(hass, ws_time_series)
     websocket_api.async_register_command(hass, ws_observations)

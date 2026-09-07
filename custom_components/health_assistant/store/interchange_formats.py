@@ -80,7 +80,7 @@ LEGACY_DOMAINS = (
     "environment_buckets",
     "environment_maintenance",
 )
-DOMAINS = LEGACY_DOMAINS + ("sleep_sessions",)
+DOMAINS = LEGACY_DOMAINS + ("sleep_sessions", "recovery_records")
 SLEEP_FIELDS = frozenset(
     (
         "person_id",
@@ -96,9 +96,17 @@ SLEEP_FIELDS = frozenset(
         "locally_excluded",
     )
 )
+RECOVERY_FIELDS = frozenset(SLEEP_FIELDS)
 COMPATIBILITY = MappingProxyType(
     {
         (1, 6): LEGACY_FIELDS,
         (2, 7): MappingProxyType({**LEGACY_FIELDS, "sleep_sessions": SLEEP_FIELDS}),
+        (2, 8): MappingProxyType(
+            {
+                **LEGACY_FIELDS,
+                "sleep_sessions": SLEEP_FIELDS,
+                "recovery_records": RECOVERY_FIELDS,
+            }
+        ),
     }
 )
