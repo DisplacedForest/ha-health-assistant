@@ -71,7 +71,7 @@ If you run an actual Home Assistant and want the working tree installed next to 
 mise run install-dev
 ```
 
-This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. Use a HACS or manual release install for the production copy.
+This deploys the working tree to `$HA_CONFIG_DIR/custom_components/health_assistant_dev` (`HA_CONFIG_DIR` defaults to `~/ha`), rewritten to the domain `health_assistant_dev` and the name "Health Assistant (Dev)" so both variants coexist without colliding. The destination is replaced wholesale on every run, and Home Assistant needs a restart to pick up changes. Use a HACS or manual release install for the production copy. The dev installer changes the Home Assistant component domain and display name while preserving fixed sparse protocol namespaces, so sleep and recovery hashes and portable archives remain compatible.
 
 ## Providers
 
