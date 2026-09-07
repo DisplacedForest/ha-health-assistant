@@ -206,11 +206,9 @@ class ProviderSink:
             else:
                 self._on_result(self._provider.key, err.code)
             raise
+        for source_id in {result.observation.source_id for result in results}:
+            self._on_recovery_result(self._provider.key, source_id, None)
+        self._on_result(self._provider.key, None)
         if any(result.changed for result in results):
-            for source_id in {
-                result.observation.source_id for result in results if result.changed
-            }:
-                self._on_recovery_result(self._provider.key, source_id, None)
-            self._on_result(self._provider.key, None)
             async_dispatcher_send(self._hass, SIGNAL_HEALTH_DATA_UPDATED)
         return results

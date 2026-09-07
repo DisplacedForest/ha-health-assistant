@@ -187,3 +187,41 @@ async def test_recovery_metric_permission_is_independent(registry):
             await registry.sink(provider.key).async_apply_recovery_changes(
                 [replace(candidate(), metric=metric)]
             )
+
+
+async def test_unchanged_and_stale_retry_recover_account_without_dispatch(
+    hass, registry, repository, freezer
+):
+    provider = MultiAccountRecoveryProvider(
+        capabilities=ProviderCapabilities(recovery_metrics=frozenset(("hrv_sdnn",)))
+    )
+    registry.register(provider)
+    sink = registry.sink(provider.key)
+    freezer.move_to("2026-09-07T12:00:00Z")
+    await sink.async_apply_recovery_changes([candidate(revision=2)])
+    first_success = registry.status(provider.key, "selected-account").last_success
+    for source_id in ("selected-account", "second-account"):
+        with pytest.raises(RecoveryError):
+            await sink.async_apply_recovery_changes(
+                [replace(candidate(revision=2), source_id=source_id, value=0)]
+            )
+    changed = Mock()
+    unsubscribe = async_dispatcher_connect(hass, SIGNAL_HEALTH_DATA_UPDATED, changed)
+    await hass.async_block_till_done()
+    changed.reset_mock()
+    for revision, action in ((2, "unchanged"), (1, "stale_revision")):
+        freezer.move_to(f"2026-09-07T12:0{revision}:00Z")
+        result = await sink.async_apply_recovery_changes(
+            [candidate(revision=revision)], checkpoint={"cursor": str(revision)}
+        )
+        await hass.async_block_till_done()
+        assert result[0].action == action and not result[0].changed
+        assert not registry.status(provider.key, "selected-account").degraded
+        assert (
+            registry.status(provider.key, "selected-account").last_success
+            > first_success
+        )
+        assert registry.status(provider.key, "second-account").degraded
+        assert repository.get_provider_state(provider.key) == {"cursor": str(revision)}
+        assert not changed.called
+    unsubscribe()
