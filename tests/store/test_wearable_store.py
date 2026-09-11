@@ -1,6 +1,9 @@
 import hashlib
 import sqlite3
+import tracemalloc
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -14,7 +17,15 @@ from custom_components.health_assistant.store.bridge_registry import (
     BridgeRegistry,
     registry_count,
 )
+from custom_components.health_assistant.store.db import HealthDatabase
 from custom_components.health_assistant.store.wearable import WearableRepository
+from custom_components.health_assistant.store.wearable_archive import (
+    export_records,
+    finalize_staging,
+    prepare_staging,
+    replay_wearable,
+    stage_record,
+)
 from custom_components.health_assistant.store.wearable_models import (
     WearableBucket,
     WearableError,
@@ -28,6 +39,7 @@ from custom_components.health_assistant.store.wearable_snapshot import (
     IDENTITY_FIELDS,
     snapshot_hash,
 )
+from custom_components.health_assistant.wearable_admin import fresh_namespace
 
 NOW = datetime(2026, 9, 11, tzinfo=UTC)
 START = time_us(NOW - timedelta(days=1))
@@ -435,3 +447,251 @@ def test_noop_latest_retry_keeps_query_cursor_valid(wearable):
     cursor = queries.series(*args, limit=1)["next_cursor"]
     assert apply(wearable, operations)["replayed"]
     assert len(queries.series(*args, cursor=cursor)["points"]) == 1
+
+
+def test_allocated_storage_and_backup_fit_retained_bucket_budget(
+    wearable, tmp_path, capsys
+):
+    repository, source, stream_id = wearable
+    database = repository.database
+    stream = repository.get(stream_id)
+    baseline = database.execute(
+        "SELECT sum(pgsize) FROM dbstat WHERE name='wearable_buckets'"
+    )[0][0]
+    now_us = time_us(NOW)
+
+    def rows():
+        for older, younger, resolution in ((730, 90, 3600), (90, 7, 300), (7, 0, 60)):
+            for start in range(
+                now_us - older * 86400000000,
+                now_us - younger * 86400000000,
+                resolution * 1000000,
+            ):
+                yield row(
+                    start, resolution, weight=resolution * 1000000, mean=70.123456789
+                )
+
+    with database.transaction():
+        repository._stage(stream, rows())
+        repository._replace_staged(stream)
+        database.execute("DELETE FROM wearable_pending")
+        database.execute(
+            "UPDATE wearable_streams SET sequence=1,content_hash=? WHERE id=?",
+            (bytes.fromhex("a" * 64), stream["id"]),
+        )
+    count = database.execute("SELECT COUNT(*) FROM wearable_buckets")[0][0]
+    assert count == 49344
+    allocated = (
+        database.execute(
+            "SELECT sum(pgsize) FROM dbstat WHERE name='wearable_buckets'"
+        )[0][0]
+        - baseline
+    )
+    assert allocated <= count * 160
+    metadata_before = database.execute(
+        "SELECT sum(pgsize) FROM dbstat WHERE name!='wearable_buckets'"
+    )[0][0]
+    for _ in range(254):
+        repository.enroll(
+            source["source_id"],
+            "owner",
+            weighting="sample",
+            algorithm_id="x" * 128,
+            algorithm_version="y" * 128,
+        )
+    metadata_after = database.execute(
+        "SELECT sum(pgsize) FROM dbstat WHERE name!='wearable_buckets'"
+    )[0][0]
+    assert metadata_after - metadata_before <= 254 * 4096
+    tracemalloc.start()
+    started = perf_counter()
+    apply(wearable, [row(now_us - 60000000, mean=81).wire()], 1)
+    update_seconds = perf_counter() - started
+    _, python_peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert python_peak < 2 * 1024 * 1024
+    temporary = (
+        database.execute("PRAGMA temp.page_count")[0][0]
+        * database.execute("PRAGMA temp.page_size")[0][0]
+    )
+    wal = database.path.with_name(database.path.name + "-wal").stat().st_size
+    backup = tmp_path / "wearable-backup.sqlite"
+    database.backup(backup)
+    assert backup.stat().st_size <= count * 160 + 256 * 4096 + metadata_before
+    assert database.execute("PRAGMA integrity_check")[0][0] == "ok"
+    with sqlite3.connect(backup) as restored:
+        assert (
+            restored.execute("SELECT count(*) FROM wearable_buckets").fetchone()[0]
+            == count
+        )
+        assert (
+            restored.execute(
+                "SELECT sequence FROM wearable_streams WHERE stream_id=?", (stream_id,)
+            ).fetchone()[0]
+            == 2
+        )
+    print(
+        {
+            "retained_rows": count,
+            "bucket_allocated_bytes": allocated,
+            "additional_254_stream_metadata_bytes": metadata_after - metadata_before,
+            "temporary_sqlite_bytes": temporary,
+            "wal_bytes": wal,
+            "backup_bytes": backup.stat().st_size,
+            "single_update_seconds": update_seconds,
+            "single_update_python_peak_bytes": python_peak,
+        }
+    )
+
+
+def test_archive_stages_complete_graph_before_replay_with_reordered_rows(
+    wearable, tmp_path
+):
+    _, _, stream_id = wearable
+    apply(wearable, [row().wire(), row(START + 60000000).wire()])
+    descriptor, buckets, source = snapshot(wearable)
+    staging = HealthDatabase(tmp_path / "staging.sqlite")
+    target = HealthDatabase(tmp_path / "target.sqlite")
+    staging.open()
+    target.open()
+    try:
+        for db in (staging, target):
+            for statement in MIGRATION:
+                db.execute(statement)
+        with staging.transaction():
+            prepare_staging(staging)
+            for bucket in reversed(buckets):
+                stage_record(staging, "wearable_buckets", bucket.archive(stream_id))
+            stage_record(staging, "wearable_streams", descriptor)
+            BridgeRegistry(staging).import_source(source)
+            finalize_staging(staging, NOW)
+        counts = {}
+        replay_wearable(staging, target, counts, None, NOW)
+        imported = WearableRepository(target)
+        assert list(imported.buckets(imported.get(stream_id))) == buckets
+        assert imported.get(stream_id)["origin_mode"] == "imported_history"
+        assert counts["wearable_streams"]["create"] == 1
+        assert counts["bridge_sources"]["create"] == 1
+        replay_wearable(staging, target, counts, None, NOW)
+        assert counts["wearable_streams"]["unchanged"] == 1
+        with sqlite3.connect(target.path) as connection:
+            connection.row_factory = sqlite3.Row
+            exported = list(
+                export_records(connection, "wearable_streams", timestamp(time_us(NOW)))
+            )
+            exported_rows = list(
+                export_records(connection, "wearable_buckets", timestamp(time_us(NOW)))
+            )
+        assert exported == [descriptor]
+        assert exported_rows == [bucket.archive(stream_id) for bucket in buckets]
+    finally:
+        staging.close()
+        target.close()
+
+
+@pytest.mark.parametrize("missing", ("source", "stream"))
+def test_archive_rejects_orphan_records_before_replay(wearable, tmp_path, missing):
+    _, _, stream_id = wearable
+    apply(wearable, [row().wire()])
+    descriptor, buckets, source = snapshot(wearable)
+    staging = HealthDatabase(tmp_path / "orphan.sqlite")
+    staging.open()
+    try:
+        for statement in MIGRATION:
+            staging.execute(statement)
+        with (
+            pytest.raises(WearableError, match=f"missing_{missing}_descriptor"),
+            staging.transaction(),
+        ):
+            prepare_staging(staging)
+            stage_record(staging, "wearable_buckets", buckets[0].archive(stream_id))
+            if missing != "stream":
+                stage_record(staging, "wearable_streams", descriptor)
+            if missing != "source":
+                BridgeRegistry(staging).import_source(source)
+            finalize_staging(staging, NOW)
+        assert staging.execute("SELECT COUNT(*) FROM wearable_streams")[0][0] == 0
+        assert staging.execute("SELECT COUNT(*) FROM bridge_sources")[0][0] == 0
+    finally:
+        staging.close()
+
+
+def bridge_for(repository):
+    return SimpleNamespace(
+        database=repository.database,
+        registry=BridgeRegistry(repository.database),
+        clock=lambda: NOW,
+        _loop_check=lambda function: function(),
+    )
+
+
+def test_fresh_namespace_preserves_old_history_and_sets_forward_boundary(wearable):
+    repository, source, stream_id = wearable
+    apply(wearable, [row().wire()])
+    BridgeRegistry(repository.database).mark_import_changed(source["source_id"])
+    result = fresh_namespace(
+        bridge_for(repository),
+        repository,
+        source["source_id"],
+        "forward_only",
+        [stream_id],
+        lambda: None,
+    )
+    assert result["registration_id"] != source["source_id"]
+    assert result["streams"][0]["stream_id"] != stream_id
+    assert repository.get(stream_id)["retired"]
+    assert stored(wearable) == [row()]
+    fresh_source = BridgeRegistry(repository.database).get(result["registration_id"])
+    assert not fresh_source["needs_fresh_namespace"]
+    new_stream = result["streams"][0]["stream_id"]
+    assert repository.tip(new_stream)["sequence"] == "0"
+    with pytest.raises(WearableError, match="before_capture_start"):
+        repository.apply_batch(
+            result["registration_id"],
+            native(new_stream, [row().wire()]),
+            NOW,
+            lambda: None,
+        )
+    assert repository.tip(new_stream)["sequence"] == "0"
+
+
+def test_fresh_namespace_capacity_failure_preserves_all_existing_metadata(wearable):
+    repository, source, stream_id = wearable
+    for _ in range(254):
+        repository.enroll(source["source_id"], "owner", weighting="sample")
+    with pytest.raises(BridgeError, match="registry_capacity"):
+        fresh_namespace(
+            bridge_for(repository),
+            repository,
+            source["source_id"],
+            "backfill",
+            [stream_id],
+            lambda: None,
+        )
+    assert not repository.get(stream_id)["retired"]
+    assert not BridgeRegistry(repository.database).get(source["source_id"])["retired"]
+    assert registry_count(repository.database) == 256
+
+
+def test_fresh_namespace_auth_loss_rolls_back_new_ids_and_retirement(wearable):
+    repository, source, stream_id = wearable
+    calls = 0
+
+    def authorized():
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise BridgeError("unauthorized")
+
+    with pytest.raises(BridgeError, match="unauthorized"):
+        fresh_namespace(
+            bridge_for(repository),
+            repository,
+            source["source_id"],
+            "backfill",
+            [stream_id],
+            authorized,
+        )
+    assert registry_count(repository.database) == 2
+    assert not repository.get(stream_id)["retired"]
+    assert not BridgeRegistry(repository.database).get(source["source_id"])["retired"]

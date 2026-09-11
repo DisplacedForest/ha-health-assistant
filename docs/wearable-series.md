@@ -62,8 +62,35 @@ Imported source and stream identities are readable history. Import doesn't grant
 
 Every Home Assistant restart or integration reload pauses bridge writes until administrator rearm. The producer must present its durable committed sequence and hash, plus at most one pending next batch. Matching state and an exact lost-response case can resume; divergent state stays paused. Retained history and ordinary Health Assistant, manual, Hevy and environmental capture remain available.
 
+## Administrator controls
+
+The `health_assistant/wearable/admin` WebSocket command requires an active administrator session. Its `action` and `parameters` fields support:
+
+| Action | Parameters |
+| --- | --- |
+| `enroll` | `registration_id`, `owner_id`, `weighting`, `algorithm_id`, `algorithm_version` |
+| `retire` | `stream_id` |
+| `remove` | `stream_id` |
+| `fresh_namespace` | `registration_id`, `capture_mode`, `stream_ids` |
+
+Algorithm fields are present but can be null. Enrollment returns the new stream ID and its zero sequence. It doesn't activate writing; use the bridge rearm exchange with the producer's saved state. Retiring or removing a stream pauses the source's leases before changing its metadata. Removal requires a retired stream with no retained buckets.
+
+For a fresh namespace, `capture_mode` is `forward_only` or `backfill`, and `stream_ids` selects the old streams whose definitions should be copied. The operation checks capacity, allocates a fresh source and fresh stream IDs, and retires the old source and streams in one transaction. Old history remains separate and readable. Forward-only capture rejects intervals starting before the new boundary. Backfill must still use the currently retained resolution. Neither choice copies raw samples or resets an old stream's sequence.
+
 ## Capacity
 
 Environmental streams, bridge sources and wearable streams share one current pool of 256 metadata slots. Retired and imported rows count too. A full pool rejects a new registration without evicting history. Only eligible unused retired metadata can be removed to free a slot.
 
 The fully populated retention ladder has 49,344 intervals per stream before the bounded edge groups. Archive descriptors accept at most 50,000 retained rows per stream. Actual database allocation also includes indexes and fixed schema pages. Backups, archive staging and replacement transactions need additional temporary disk space. Storage measurements belong to the tested implementation; the interval count alone isn't a database-size guarantee.
+
+The synthetic SQLite fixture measured these allocations for one stream with 49,344 retained intervals and a full registry containing one source and 255 streams:
+
+| Allocation | Measured bytes |
+| --- | ---: |
+| Retained bucket pages above the empty table | 2,793,472 |
+| Metadata added by 254 more streams with maximum-length algorithm labels | 131,072 |
+| Temporary SQLite staging pages | 2,748,416 |
+| WAL file during the fixture | 4,128,272 |
+| Database backup | 3,125,248 |
+
+That fixture uses about 56.6 allocated bytes per retained bucket. A one-interval update scanned the retained stream for maintenance and used 137,705 bytes of peak traced Python allocation. The instrumented local run took about 1.3 seconds. SQLite native buffers and temporary files are separate from that Python figure. These are fixture results, not a speed or total-disk guarantee for every Home Assistant host.
