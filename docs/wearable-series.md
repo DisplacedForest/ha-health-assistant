@@ -44,6 +44,42 @@ Only the latest accepted batch can be retried. Its verified sequence and hash re
 
 New fine-grained corrections cannot overwrite retained coarse history. `retained_resolution_required` identifies the complete interval the source must rebuild. `outside_retention` means the interval has expired. A source must reconcile its pending changes before submitting a different batch; it mustn't treat a rejected request as accepted.
 
+## Native wire format and hashing
+
+Send a POST to `/api/health_assistant/bridge/{registration_id}/batches` with ordinary Home Assistant Bearer authentication and the current `X-Health-Receiver-Session` and `X-Health-Write-Lease` headers. See [bridge enrollment and rearm](mobile-bridge.md) for obtaining these grants. The request body has exactly three fields: `version` (integer 1), `domain` (the string `wearable`) and `stream_batch` (an object).
+
+The stream batch has exactly these fields:
+
+| Field | Wire value |
+| --- | --- |
+| `stream_id` | Enrolled lowercase UUID |
+| `expected_sequence` | Current acknowledged nonnegative decimal string |
+| `sequence` | Next positive decimal string |
+| `hash_version` | Integer 1 |
+| `content_hash` | Lowercase SHA-256 hex digest |
+| `operations` | Array of 1 through 1,000 complete operations |
+
+Sequences and counts are canonical base-10 strings, without signs, whitespace or leading zeroes. The maximum is `9223372036854775807`. No operation has a nullable or omitted required field. Its exact fields depend on its kind and the enrolled stream weighting:
+
+| Kind | Exact fields |
+| --- | --- |
+| Sample-weighted replacement | `op`, `start`, `resolution`, `count`, `sum`, `min`, `max` |
+| Time-weighted replacement | `op`, `start`, `resolution`, `covered_microseconds`, `weighted_sum`, `min`, `max` |
+| Deletion | `op`, `start`, `resolution` |
+
+`op` is `replace` or `delete`. `start` is an aware timestamp and `resolution` is integer 60, 300 or 3600. Start must align to that interval in UTC. Counts and covered durations are positive decimal strings. Sums and extrema are finite JSON numbers with the numeric limits above. Use the stream's weighting fields only; do not include null placeholders for the other native weighting mode.
+
+For the native content hash:
+
+1. Validate and normalize each operation. Spell its start as UTC with exactly six fractional digits and `Z`, for example `2026-09-10T00:00:00.000000Z`. Normalize counts and durations to canonical decimal strings and numeric aggregates to binary64 values.
+2. Sort operations by normalized start, then numeric resolution. Duplicate or overlapping intervals are invalid.
+3. Build an object containing exactly `hash_scope: "health_assistant.wearable_batch"`, `hash_version: 1`, `stream_id`, `expected_sequence`, `sequence` and the normalized sorted `operations`. There is no `content_hash` field in this projection.
+4. Serialize that object with RFC 8785 JSON Canonicalization Scheme (JCS), encode as UTF-8 and calculate SHA-256. Use its lowercase hexadecimal spelling as `content_hash`. Do not add a newline, byte-order mark or enclosing transport fields.
+
+Authentication, registration, session and lease metadata are outside the hash. A successful response contains `changed`, `replayed`, `sequence` and `content_hash`; booleans identify a new commit or the latest verified retry. Error responses carry a stable code. A retained-resolution error also identifies `required_start` and `required_resolution` for the complete replacement.
+
+The [native encoding vectors](../tests/fixtures/native_wire_vectors.json) freeze the canonical bytes and hashes. Some shared vectors use illustrative identifiers to isolate encoding behavior; they are not complete valid enrollment or HTTP requests. [Native transport tests](../tests/test_wearable_bridge.py) build valid requests against the installed integration fixture.
+
 ## Reading history
 
 The authenticated `health_assistant/wearable_series` WebSocket command accepts `stream_id`, aware `start` and `end` timestamps, and optional `resolution`, `limit` and `cursor` fields. The range can span up to 730 days. `resolution` is `auto`, `60`, `300` or `3600`; explicit resolutions are JSON integers. Automatic display resolution is one minute through seven requested days, five minutes through ninety days, and hourly for longer ranges.
@@ -55,6 +91,18 @@ Pages contain 500 points by default, with a maximum of 1,000. Follow `next_curso
 ## Archives and capture permissions
 
 A schema 10 archive adds `wearable_streams.jsonl` and `wearable_buckets.jsonl`. Each stream includes its complete retained snapshot, sequence, last accepted batch hash, row count and snapshot hash. The snapshot hash binds the descriptor and every ordered bucket. It proves archive integrity, not that a vendor signed the data.
+
+Each stream descriptor has exactly `stream_id`, `source_id`, `metric`, `unit`, `weighting`, `algorithm_id`, `algorithm_version`, `retired`, `sequence`, `hash_version`, `content_hash`, `snapshot_at`, `snapshot_bucket_count` and `snapshot_hash`. Metric is `heart_rate`, unit is `bpm`, weighting is `sample` or `time`, and both IDs are lowercase UUIDs. Algorithm fields are null or nonempty UTF-8 strings of at most 128 bytes each. Retirement is boolean. Sequence is a nonnegative decimal string; hash version is integer 1. At sequence zero, content hash is null and bucket count is zero. Otherwise content hash is lowercase SHA-256. Bucket count is an integer from zero through 50,000. Snapshot time is canonical UTC with six fractional digits and `Z`, matching the manifest creation time.
+
+Each archived bucket has exactly `stream_id`, `start`, `resolution_s`, `sample_count`, `sample_sum`, `minimum`, `maximum`, `covered_us` and `weighted_sum`. These field names differ from native operations. Start uses the same canonical timestamp spelling; resolution is integer 60, 300 or 3600. For sample weighting, sample count is a positive decimal string and sample sum is finite; covered duration and weighted sum are null. For time weighting, covered duration is a positive decimal string and weighted sum is finite; both sample fields are null. Extrema are finite numbers in either mode. Keep every field, including nulls. There are no deletion records in a complete snapshot.
+
+The snapshot hash is SHA-256 over one concatenated byte stream:
+
+1. UTF-8 literal `health_assistant.wearable_snapshot.v1`, followed by one LF byte.
+2. UTF-8 JCS of the complete descriptor with exactly `snapshot_hash` removed, followed by one LF byte.
+3. UTF-8 JCS of each complete bucket, sorted by start and numeric resolution, each followed by one LF byte.
+
+Include the final LF. Do not insert blank lines or a byte-order mark. An empty stream still hashes the prefix and descriptor lines. Snapshot time, retirement, nullable fields and row count all participate. The [snapshot vectors](../tests/fixtures/wearable-snapshot-vectors.json) contain complete framing examples, including the deliberately mismatched-count negative case. [Snapshot validation tests](../tests/store/test_wearable_snapshot.py) distinguish valid framing from valid domain data.
 
 Import compares complete stream tips. Older snapshots are skipped. Matching tips leave the destination's bucket representation unchanged, including missing keys. A newer snapshot replaces the complete retained stream atomically, so an old deleted interval cannot sneak back through a row-by-row merge. Retirement is permanent for that retained identity.
 
