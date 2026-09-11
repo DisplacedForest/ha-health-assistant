@@ -136,6 +136,7 @@ export class SparseController {
     this.listVersion++;
     const current = () => this.active && version === this.version;
     this.loading = true;
+    this.sourceLoading = false;
     this.error = undefined;
     this.update();
     try {
@@ -163,7 +164,7 @@ export class SparseController {
   }
 
   async moreSources() {
-    if (!this.sourceCursor || this.sourceLoading) return;
+    if (!this.sourceCursor || this.sourceLoading || this.loading) return;
     const version = this.version;
     this.sourceLoading = true;
     try {
@@ -175,7 +176,7 @@ export class SparseController {
       if (version !== this.version || !this.active) return;
       if (error?.code === "stale_cursor") await this.refresh();
       else this.error = message(error);
-    } finally { this.sourceLoading = false; this.update(); }
+    } finally { if (version === this.version && this.active) { this.sourceLoading = false; this.update(); } }
   }
 
   async loadRecords(more = false, version = this.version, retry = true) {
@@ -271,7 +272,7 @@ export class SparseController {
   async exclude() {
     const record = this.detail;
     if (!record || !this.admin || record.status === "deleted" || this.mutation) return;
-    const request = this.detailVersion, domain = this.domain;
+    const request = this.detailVersion, domain = this.domain, selection = this.selectionVersion;
     const current = () => this.active && this.domain === domain && this.detailVersion === request;
     this.mutation = record.id;
     this.detailError = undefined;
@@ -281,7 +282,7 @@ export class SparseController {
         ...(domain === "sleep" ? { session_id: record.id } : { record_id: record.id }),
         excluded: !record.locally_excluded, expected_source_revision: record.source_revision, expected_payload_hash: record.payload_hash,
       });
-      if (!current()) return;
+      if (!this.active || this.domain !== domain || this.selectionVersion !== selection) return;
       await this.refresh();
       if (this.active && this.detailVersion === request && this.domain === domain) await this.openDetail(record.id);
     } catch (error) {

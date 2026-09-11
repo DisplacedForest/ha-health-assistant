@@ -356,3 +356,58 @@ test("identical mutable labels expose the distinct source and algorithm keys", a
   assert.match(view, /Watch \(fixture\/watch; hrv_sdnn; sleep_summary; unknown algorithm; unknown version\)/);
   assert.match(view, /Watch \(fixture\/second watch; hrv_sdnn; sleep_summary; nightly; 2\)/);
 });
+
+test("committed exclusion refreshes closed-detail charts and supersedes a precommit timer", async () => {
+  const commit = deferred(), timer = deferred();
+  let read = 0;
+  const { c, calls } = fixture("recovery", {
+    recovery_observation_exclusion: () => commit.promise,
+    derived_series: (request) => {
+      read++;
+      const result = empty(request.series_key);
+      result.points[0].value = read < 3 ? 50 : null;
+      return read === 2 ? timer.promise : result;
+    },
+  });
+  await c.refresh();
+  await c.openDetail(5);
+  const mutation = c.exclude();
+  c.closeDetail();
+  const pendingTimer = c.refresh();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(c.series.points[0].value, 50);
+  commit.resolve({});
+  await mutation;
+  assert.equal(c.series.points[0].value, null);
+  assert.equal(c.detail, undefined);
+  const last = c.lastSuccess;
+  timer.resolve({ ...empty(recoveryKey), points:[{ ...empty(recoveryKey).points[0], value:50 }] });
+  await pendingTimer;
+  assert.equal(c.series.points[0].value, null);
+  assert.equal(c.lastSuccess, last);
+  assert.equal(calls.filter((request) => request.type.endsWith("derived_series")).length, 3);
+});
+
+test("obsolete source page cannot clear the current page lock or append duplicates", async () => {
+  const oldPage = deferred(), newPage = deferred();
+  let pages = 0;
+  const second = { ...sleepKey, source_id:"second" };
+  const { c } = fixture("sleep", { derived_sources: (request) => {
+    if (!request.cursor) return { sources:[source(sleepKey)], next_cursor:"next" };
+    pages++;
+    return pages === 1 ? oldPage.promise : newPage.promise;
+  } });
+  await c.refresh();
+  const old = c.moreSources();
+  await c.select(keyString(sleepKey));
+  const current = c.moreSources();
+  oldPage.resolve({ sources:[source(second)], next_cursor:null });
+  await old;
+  assert.equal(c.sourceLoading, true);
+  await c.moreSources();
+  assert.equal(pages, 2);
+  newPage.resolve({ sources:[source(second)], next_cursor:null });
+  await current;
+  assert.deepEqual(c.sources.map((item) => item.series_key.source_id), ["watch", "second"]);
+  assert.equal(c.sourceLoading, false);
+});
