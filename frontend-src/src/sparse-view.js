@@ -21,6 +21,12 @@ export function instant(value, zone) {
   return new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
 }
 
+export function sourceLabel(source) {
+  const key = source.series_key;
+  const method = key.metric ? `; ${key.metric}; ${key.context}; ${key.algorithm_id || "unknown algorithm"}; ${key.algorithm_version || "unknown version"}` : "";
+  return `${source.display_label} (${key.provider}/${key.source_id}${method})`;
+}
+
 export function endpoint(record, side, displayZone) {
   const value = record[`${side === "start" ? "started" : "ended"}_at`];
   const zone = record[`${side}_zone`];
@@ -62,7 +68,7 @@ export function controls(c, title) {
       <label>Source and method<select aria-label="Source and method" .value=${selected} @change=${(event) => c.select(event.target.value)}>
         <option value="" ?selected=${!selected}>Choose a source</option>
         ${selected && !c.descriptor ? html`<option value=${selected} selected>Saved selection: ${selected}</option>` : nothing}
-        ${c.sources.map((source) => html`<option value=${keyString(source.series_key)} ?selected=${selected === keyString(source.series_key)}>${source.display_label}</option>`)}
+        ${c.sources.map((source) => html`<option value=${keyString(source.series_key)} ?selected=${selected === keyString(source.series_key)}>${sourceLabel(source)}</option>`)}
       </select></label>
       <label>History<select aria-label="History range" .value=${String(c.days)} @change=${(event) => c.setRange(Number(event.target.value))}>${[7, 28, 90].map((days) => html`<option value=${days} ?selected=${c.days === days}>${days} days</option>`)}</select></label>
       <label>End date<input type="date" aria-label="History end date" .value=${c.endDate || ""} max=${displayDate(Date.now(), c.timezone)} @change=${(event) => event.target.value && c.setRange(c.days, event.target.value)}></label>

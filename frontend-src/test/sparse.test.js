@@ -347,3 +347,12 @@ test("timer refresh updates corrected open detail without stealing focus", async
   assert.equal(c.listDay, undefined);
   assert.equal(c.listLoading, false);
 });
+
+test("identical mutable labels expose the distinct source and algorithm keys", async () => {
+  const second = { ...recoveryKey, source_id:"second watch", algorithm_id:"nightly", algorithm_version:"2" };
+  const { c } = fixture("recovery", { derived_sources: () => ({ sources:[source(recoveryKey,"Watch"),source(second,"Watch")], next_cursor:null }) });
+  await c.refresh();
+  const view = text(renderRecovery(c));
+  assert.match(view, /Watch \(fixture\/watch; hrv_sdnn; sleep_summary; unknown algorithm; unknown version\)/);
+  assert.match(view, /Watch \(fixture\/second watch; hrv_sdnn; sleep_summary; nightly; 2\)/);
+});
