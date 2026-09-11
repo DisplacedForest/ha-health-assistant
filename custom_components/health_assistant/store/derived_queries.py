@@ -94,7 +94,10 @@ def range_query(domain, series, start, end, as_of):
     for key, value in sorted(series.items()):
         conditions.append(f"{key} IS ?")
         params.append(value)
-    return f"SELECT {columns} FROM {table} WHERE " + " AND ".join(conditions), params
+    index = " INDEXED BY idx_recovery_source_query" if domain == "recovery" else ""
+    return f"SELECT {columns} FROM {table}{index} WHERE " + " AND ".join(
+        conditions
+    ), params
 
 
 def point_from_row(domain, row, zone, today, rule):

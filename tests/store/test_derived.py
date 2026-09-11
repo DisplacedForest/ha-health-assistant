@@ -408,3 +408,24 @@ def test_large_history_streams_only_bounded_interval(database, monkeypatch):
     assert result["points"][-1]["alternative_count"] == 9999
     assert len(result["points"]) == 90
     assert peak < 2_000_000
+
+
+def test_recovery_query_does_not_traverse_old_history(database):
+    with database.transaction():
+        database.execute(
+            "WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<49999) INSERT INTO recovery_records(person_id,metric,provider,source_id,external_id,source_revision,payload_hash,source_state,first_ingested_at,last_ingested_at,started_at,ended_at,value,unit,context,provenance) SELECT 'primary','hrv_sdnn','fixture','account',CAST(x AS TEXT),1,'old-fixture','active','2020-01-01T00:00:00.000000Z','2020-01-01T00:00:00.000000Z','2020-01-01T00:00:00.000000Z','2020-01-01T00:00:00.000000Z',50,'ms','unknown','{}' FROM n"
+        )
+    sql, args = range_query("recovery", KEY, NOW - timedelta(days=118), NOW, NOW)
+    plan = " ".join(
+        row["detail"] for row in database.execute("EXPLAIN QUERY PLAN " + sql, args)
+    )
+    assert "idx_recovery_source_query" in plan
+    assert "ended_at>?" in plan and "ended_at<?" in plan
+    callbacks = []
+    database._conn.set_progress_handler(lambda: callbacks.append(1) or 0, 100)
+    try:
+        result = read(database, "recovery", KEY)
+    finally:
+        database._conn.set_progress_handler(None, 0)
+    assert all(point["value"] is None for point in result["points"])
+    assert len(callbacks) < 10
