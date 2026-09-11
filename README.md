@@ -282,7 +282,7 @@ If the database ever fails to open (corruption, or a file written by a newer ver
 
 ## Sleep history
 
-The store can retain completed sleep sessions from a provider that explicitly supports sleep. This is the storage and API foundation. Existing sensor mappings do not start recording sleep, and this change does not add a phone connection or a Sleep panel.
+The unreleased Sleep view shows completed sessions from providers that explicitly support sleep. Choose a source and a 7-, 28- or 90-day range, then inspect a session's stages, reported totals and gaps. The daily chart uses the longest session ending on each date. Naps and overlapping sessions remain separate in the underlying list. Existing sensor mappings do not start recording sleep, and the view does not connect a phone.
 
 Each source keeps its own sessions, stage intervals and reported totals. Overlapping source records stay separate. Gaps and unknown stages remain visible; partial stage coverage is never presented as a full night's sleep. In-bed context is kept separately from sleep stages. A source's reported total can disagree with its intervals, and both values are retained.
 
@@ -302,7 +302,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and the pull request 
 
 ## Recovery history
 
-The store now supports resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate from explicitly authorized providers. Measurements retain their source, method, measurement window and context. Unknown context stays unknown, and different HRV methods or algorithms are never combined. This adds storage and bounded read APIs; phone connections, baseline calculations and the Recovery panel are separate work.
+The store supports resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate from explicitly authorized providers. The unreleased Recovery view shows their history and personal baselines. Measurements retain their source, method, measurement window and context. Unknown context stays unknown, and different HRV methods or algorithms are never combined. Phone connections still require a compatible provider.
 
 Corrections replace complete source payloads while preserving local exclusions. Ordered deletion tombstones prevent older records from returning. Portable history includes recovery records and tombstones without reconnecting their sources. Existing scalar readings and Overview calculations are unchanged. See [recovery provider and API guidance](docs/recovery.md) for supported units, comparison-series keys and administrator exclusion.
 
@@ -311,3 +311,5 @@ Corrections replace complete source payloads while preserving local exclusions. 
 The read-only derived API computes daily representatives, 7/28/90-day rolling means and trends, and a personal baseline from the preceding 28 days. A baseline needs at least 14 days with data. Missing days stay empty, and the current incomplete day is excluded from rolling calculations. Sleep uses the longest session ending on a display date, without adding naps or filling coverage gaps. Recovery accounts, contexts and HRV methods stay separate.
 
 Queries use current local history, so corrections and exclusions appear on the next read. These are descriptive values, not illness predictions or readiness scores. Existing Overview and Body screens keep their behavior. See [derived values and API guidance](docs/derived-metrics.md) for selection rules, display timezones, coverage and null reasons.
+
+The panel keeps your selected account and method, including when capture stops. Missing history stays empty. Dates follow the Home Assistant timezone; detail shows the source timezone or states the display fallback. Administrators can exclude a source record from summaries and restore it later. The panel refreshes every minute while attached and after a confirmed change. A failed refresh keeps the previous values visibly marked as stale. See [using Sleep and Recovery](docs/sleep-recovery-panel.md) for details and synthetic screenshots.

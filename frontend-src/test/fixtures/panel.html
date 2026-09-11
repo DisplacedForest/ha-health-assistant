@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Health panel synthetic fixture</title><style>
+:root { --primary-background-color:#f5f6f8; --card-background-color:#fff; --primary-text-color:#252b34; --secondary-text-color:#5c6572; --divider-color:#dce1e7; --primary-color:#2979a8; font-family:Arial,sans-serif; }
+body { margin:0; background:var(--primary-background-color); color:var(--primary-text-color); }
+body.dark { --primary-background-color:#171c24; --card-background-color:#232b36; --primary-text-color:#e6ebf1; --secondary-text-color:#a3afbe; --divider-color:#435061; --primary-color:#75b7da; }
+.fixture-tools { padding:12px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:13px; border-bottom:1px solid var(--divider-color); }
+.fixture-tools button,.fixture-tools select { padding:7px; }
+#mount { margin:auto; max-width:100%; }
+health-assistant-panel { min-height:calc(100vh - 70px); }
+</style></head><body><div class="fixture-tools"><strong>Synthetic fixture, no live connection</strong><label>Width <select id="width"><option>360</option><option>768</option><option selected>1440</option></select></label><button id="theme">Use dark mode</button><label>Scenario <select id="scenario"><option value="normal">Populated</option><option value="empty">No source</option><option value="error">Transport error</option><option value="permission">Permission error</option><option value="long">Long labels</option><option value="large">Large interval detail</option><option value="readonly">Read only</option><option value="conflict">Exclusion conflict</option></select></label></div><main id="mount"></main><script type="module" src="/fixture.js"></script></body></html>
