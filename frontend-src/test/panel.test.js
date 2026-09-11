@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { SparseController } from "../src/sparse-controller.js";
 
 const source = (await readFile(new URL("../src/panel.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "");
@@ -23,6 +24,8 @@ function fixture(storage = new Map()) {
     nothing: undefined,
     overviewStyles: "",
     bodyStyles: "",
+    sparseStyles: "",
+    SparseController,
     window: { localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) } },
     customElements: { get: () => undefined, define: (_, constructor) => { Panel = constructor; } },
   });

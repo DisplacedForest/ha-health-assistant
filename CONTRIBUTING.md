@@ -63,6 +63,14 @@ mise run --tool node@22.23.2 frontend-verify
 
 Lint, interaction tests, and bundle verification run as part of `mise run check` and in CI. A panel change pushed without a rebuilt, committed bundle fails the Frontend job. The panel gets data only through the integration's WebSocket commands; frontend code never imports storage internals, and everything it ships must work with no internet access (no CDN loads, no external fonts).
 
+For isolated Sleep and Recovery browser checks, build the bundle and run:
+
+```bash
+mise exec node@22.23.2 -- node frontend-src/test/serve-fixture.mjs
+```
+
+Open the loopback URL printed by the server. It serves only the panel bundle and synthetic fixture assets, uses no Home Assistant process and writes no live history. The fixture toolbar selects widths, themes and response scenarios. Verify source/range selection, keyboard detail focus and restoration, interval pagination, large detail, long labels, first-use, read-only and failed-refresh states. The saved JSON was produced through the real repository queries with a temporary SQLite database. To regenerate it in an activated supported test environment, run `PYTHONPATH=. python frontend-src/test/generate-sparse-fixture.py`. Regeneration changes the fixture date and example records. The browser fixture uses a mock transport and static baseline snapshots; it does not replace installed WebSocket, correction, restore or lifecycle verification.
+
 ## Installing the dev variant into a real instance
 
 If you run an actual Home Assistant and want the working tree installed next to a HACS-installed production copy:

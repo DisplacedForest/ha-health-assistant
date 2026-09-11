@@ -1,6 +1,10 @@
 import { LitElement, html, css, svg, nothing } from "lit";
 import { renderOverview, renderDetail, overviewStyles } from "./overview-view.js";
 import { renderBody, renderBodyDetail, bodyStyles } from "./body-view.js";
+import { SparseController } from "./sparse-controller.js";
+import { renderSleep } from "./sleep-view.js";
+import { renderRecovery } from "./recovery-view.js";
+import { sparseStyles } from "./sparse-view.js";
 
 const KG_TO_LB = 2.204622621848776;
 const M_TO_MI = 1 / 1609.344;
@@ -71,6 +75,7 @@ class HealthAssistantPanel extends LitElement {
     this._bodySide = "front";
     this._bodyRequest = 0;
     this._workoutRequest = 0;
+    this._sparse = new SparseController(this);
   }
 
   get _domain() {
@@ -91,7 +96,7 @@ class HealthAssistantPanel extends LitElement {
       this._loadedOnce = true;
       try {
         const saved = window.localStorage.getItem(this._viewPreferenceKey);
-        if (["overview", "body", "trends"].includes(saved)) this._tab = saved;
+        if (["overview", "body", "trends", "sleep", "recovery"].includes(saved)) this._tab = saved;
       } catch {}
       this._refresh();
     }
@@ -99,6 +104,8 @@ class HealthAssistantPanel extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this._sparse.connect();
+    if (this.hass && this._loadedOnce) this._refresh();
     this._timer = window.setInterval(() => {
       if (this.hass && !this._loading) this._refresh();
     }, 60000);
@@ -107,6 +114,8 @@ class HealthAssistantPanel extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
+    this._request++;
+    this._sparse.disconnect();
   }
 
   async _refresh() {
@@ -114,6 +123,10 @@ class HealthAssistantPanel extends LitElement {
     this._loading = true;
     this._error = undefined;
     try {
+      if (["sleep", "recovery"].includes(this._tab)) {
+        await this._sparse.refresh(this._tab);
+        return;
+      }
       const overview = await this.hass.callWS({ type: `${this._domain}/overview` });
       if (request === this._request) this._overview = overview;
       if (this._tab === "trends") await this._loadSeries();
@@ -283,6 +296,7 @@ class HealthAssistantPanel extends LitElement {
   }
 
   _setTab(tab) {
+    this._sparse.navigate(tab);
     this._tab = tab;
     try {
       window.localStorage.setItem(this._viewPreferenceKey, tab);
@@ -633,18 +647,19 @@ class HealthAssistantPanel extends LitElement {
             >
               Trends
             </button>
+            ${["sleep", "recovery"].map((tab) => html`<button class=${this._tab === tab ? "active" : ""} aria-pressed=${this._tab === tab} @click=${() => this._setTab(tab)}>${tab === "sleep" ? "Sleep" : "Recovery"}</button>`)}
           </nav>
         </header>
         ${this._error
           ? html`<div class="card error">${this._error}</div>`
           : nothing}
-        ${this._tab === "overview" ? this._renderOverview() : this._tab === "body" ? renderBody(this) : this._renderTrends()}
+        ${this._tab === "overview" ? this._renderOverview() : this._tab === "body" ? renderBody(this) : this._tab === "sleep" ? renderSleep(this._sparse) : this._tab === "recovery" ? renderRecovery(this._sparse) : this._renderTrends()}
         ${this._bodyRegion ? renderBodyDetail(this) : renderDetail(this)}
       </div>
     `;
   }
 
-  static styles = [overviewStyles, bodyStyles, css`
+  static styles = [overviewStyles, bodyStyles, sparseStyles, css`
     :host {
       display: block;
       height: 100%;
