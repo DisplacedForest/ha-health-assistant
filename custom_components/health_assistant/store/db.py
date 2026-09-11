@@ -110,3 +110,13 @@ class HealthDatabase:
         with self.transaction():
             for sql, params in statements:
                 self.execute(sql, params)
+
+    def iterate(self, sql: str, params: Iterable[Any] = ()) -> Iterator[sqlite3.Row]:
+        with self._lock:
+            if self._conn is None:
+                raise StoreError("database is not open")
+            cursor = self._conn.execute(sql, tuple(params))
+            try:
+                yield from cursor
+            finally:
+                cursor.close()
