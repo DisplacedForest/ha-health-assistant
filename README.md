@@ -101,7 +101,13 @@ Twelve continuously recorded streams budget about 79.31 MB after two years, plus
 
 Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups and portable history archives include retained environmental records, coverage and area metadata. A database backup restores the whole store; a portable import merges its history.
 
-This build moves the database to schema 8. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it.
+This build moves the database to schema 9. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it. Migration stops if a custom legacy provider already uses the reserved `bridge:<UUID>` namespace; it does not adopt that history.
+
+## Native phone bridge
+
+The native bridge receiver stores ordered corrections, deletions and source identity for compatible phone producers. It supports scalar values, workouts, sleep and recovery records. Apple Health and Health Connect client routes still need qualification; installing this receiver doesn't connect a phone by itself.
+
+An administrator enrolls the source and explicitly rearms it after every integration setup, reload or backup restore. Capture stays paused when the producer's saved state doesn't match. Portable imports preserve history without granting capture permission. Environmental streams and bridge sources share the same 256-slot registry. See [native bridge setup and protocol](docs/mobile-bridge.md) for enrollment, payloads, retries, rearm and current limits.
 
 ## Getting data in
 

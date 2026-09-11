@@ -5,6 +5,7 @@ import json
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .bridge_models import reserved
 from .derived_metrics import CALCULATION_VERSION, baseline, rolling
 from .models import CANONICAL_UNITS, DAILY_ACTIVITY_METRICS, MetricType
 from .recovery_queries import normalize_series
@@ -322,6 +323,35 @@ class DerivedQueries:
                     "active_count": row["active_count"],
                     "excluded_count": row["excluded_count"],
                 }
+                if reserved(series["provider"]):
+                    sources = self.database.execute(
+                        "SELECT source_id,label,origin_mode,retired,needs_fresh_namespace FROM bridge_sources WHERE source_id=?",
+                        (series["provider"][7:],),
+                    )
+                    if sources:
+                        source = sources[0]
+                        descriptor["display_label"] = " / ".join(
+                            [
+                                source["label"] or "Phone bridge",
+                                *[
+                                    str(series[key])
+                                    for key in fields
+                                    if key not in ("provider", "source_id")
+                                    and series[key] is not None
+                                ],
+                            ]
+                        )
+                        descriptor["capture_state"] = (
+                            "retired"
+                            if source["retired"]
+                            else "imported history"
+                            if source["origin_mode"] == "imported_history"
+                            else "needs fresh enrollment"
+                            if source["needs_fresh_namespace"]
+                            else self.capture_states.get(
+                                ("bridge", source["source_id"], domain), "paused"
+                            )
+                        )
                 digest.update(encoded(descriptor) + b"\n")
                 if offset <= count < offset + limit:
                     selected.append(descriptor)

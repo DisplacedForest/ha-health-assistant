@@ -28,7 +28,15 @@ def validate_archive(path: Path, staging_path: Path):
     try:
 
         def consume(domain, record):
-            if domain == "sleep_sessions":
+            if domain == "bridge_sources":
+                from .bridge_models import source_descriptor
+
+                value = {**source_descriptor(record), "origin_mode": "imported_history"}
+            elif domain == "bridge_records":
+                from .bridge_archive import parse_record
+
+                value = parse_record(record, datetime.now(UTC))
+            elif domain == "sleep_sessions":
                 from .sleep import parse_archive_session, session_columns
 
                 now = datetime.now(UTC)
@@ -60,6 +68,9 @@ def validate_archive(path: Path, staging_path: Path):
 
         with staging.transaction():
             manifest = read_archive(path, consume)
+            from .bridge_archive import validate_graph
+
+            validate_graph(staging, manifest)
             _validate_relations(staging)
             _validate_canonical(staging)
         return staging, manifest
@@ -111,12 +122,18 @@ def _validate_relations(staging):
 def _validate_canonical(staging):
     staging.execute("CREATE TABLE archive_observations AS SELECT * FROM observations")
     staging.execute("CREATE TABLE archive_claims AS SELECT * FROM source_claims")
+    staging.execute("CREATE TABLE archive_bridge AS SELECT * FROM bridge_records")
     repository = HealthRepository(staging)
-    for row in rows_by_id(staging, "source_claims"):
-        repository._reconcile_around(repository._claim_from_row(row))
+    from .models import MetricType
+
+    for row in staging.execute("SELECT DISTINCT person_id,metric FROM source_claims"):
+        repository.reconcile_metric(
+            row["person_id"], MetricType(row["metric"]), streaming=True
+        )
     for expected, actual in (
         ("archive_observations", "observations"),
         ("archive_claims", "source_claims"),
+        ("archive_bridge", "bridge_records"),
     ):
         if staging.execute(
             f"SELECT 1 FROM (SELECT * FROM {expected} EXCEPT SELECT * FROM {actual}) LIMIT 1"
@@ -128,3 +145,4 @@ def _validate_canonical(staging):
             )
     staging.execute("DROP TABLE archive_observations")
     staging.execute("DROP TABLE archive_claims")
+    staging.execute("DROP TABLE archive_bridge")

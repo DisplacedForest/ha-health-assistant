@@ -102,7 +102,7 @@ def test_full_roundtrip_uses_source_revision_and_exclusion_or(
         "created_at",
         "files",
     }
-    assert manifest["format_version"] == 2 and manifest["source_schema_version"] == 8
+    assert manifest["format_version"] == 2 and manifest["source_schema_version"] == 9
     preview = import_archive(target, path)
     assert preview["expected"]["sleep_sessions"]["create"] == 1
     assert preview["expected"]["sleep_sessions"]["deleted"] == 1
@@ -216,7 +216,7 @@ def test_archive_record_contract_rejects_invalid_fields(change):
 def test_unknown_archive_layouts_are_rejected(database, tmp_path):
     manifest = export_archive(database, tmp_path / "history.tar.gz")
     for change in (
-        {"source_schema_version": 9},
+        {"source_schema_version": 10},
         {"source_schema_version": True},
         {"schema_version": 7},
         {"format_version": 3},

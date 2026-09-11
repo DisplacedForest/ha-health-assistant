@@ -387,7 +387,7 @@ def test_migration_eight_preserves_seven_and_is_atomic(tmp_path):
     connection.close()
     database = HealthDatabase(path)
     database.open()
-    assert database.execute("SELECT version FROM schema_info")[0][0] == 8
+    assert database.execute("SELECT version FROM schema_info")[0][0] == 9
     assert database.execute("SELECT count(*) FROM provider_state")[0][0] == 1
     assert database.execute("SELECT count(*) FROM sleep_sessions")[0][0] == 0
     database.close()

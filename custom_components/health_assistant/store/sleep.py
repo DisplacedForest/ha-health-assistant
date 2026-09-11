@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from .bridge_models import BridgeError, reserved
 from .sleep_models import (
     PAYLOAD_FIELDS,
     SleepChangeResult,
@@ -133,6 +134,8 @@ class SleepRepository:
         for change in changes:
             if not isinstance(change, SleepSession):
                 raise SleepError()
+            if reserved(change.provider):
+                raise BridgeError("reserved_provider")
             session = normalized_session(
                 change.provider,
                 change.source_id,
@@ -159,6 +162,8 @@ class SleepRepository:
             if not isinstance(checkpoint, tuple) or len(checkpoint) != 2:
                 raise SleepError()
             provider, state = checkpoint
+            if reserved(provider):
+                raise BridgeError("reserved_provider")
             if (
                 not isinstance(provider, str)
                 or not provider

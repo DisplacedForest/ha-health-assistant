@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
+from .bridge_archive import replay_bridge, validate_target_sources
+from .bridge_models import reserved
+from .bridge_registry import require_registry_slot
 from .errors import StoreValidationError
 from .interchange_archive import PAGE_SIZE
 from .interchange_staging import rows_by_id
@@ -64,10 +67,13 @@ def _count(counts, domain, action):
 def replay_archive(staging, target, after_batch=None):
     repository = HealthRepository(target)
     counts = {}
+    validate_target_sources(staging, target, counts)
     with target.transaction():
         changed = False
         for batch in _batches(rows_by_id(staging, "source_claims")):
             for incoming in batch:
+                if reserved(incoming["provider"]):
+                    continue
                 rows = target.execute(
                     "SELECT * FROM source_claims WHERE provider=? AND external_id=? AND metric=? AND observed_at=?",
                     (
@@ -114,6 +120,8 @@ def replay_archive(staging, target, after_batch=None):
     for batch in _batches(rows_by_id(staging, "workouts")):
         with target.transaction():
             for incoming in batch:
+                if reserved(incoming["provider"]):
+                    continue
                 rows = target.execute(
                     "SELECT * FROM workouts WHERE provider=? AND external_id=?",
                     (incoming["provider"], incoming["external_id"]),
@@ -154,6 +162,7 @@ def replay_archive(staging, target, after_batch=None):
         )
     _replay_sleep(staging, target, counts, after_batch)
     _replay_recovery(staging, target, counts, after_batch)
+    replay_bridge(staging, target, counts, after_batch)
     return counts
 
 
@@ -174,15 +183,7 @@ def _replay_streams(staging, target, counts):
                 mapping[incoming["id"]] = existing["id"]
                 _count(counts, "environment_streams", "unchanged")
                 continue
-            if (
-                target.execute("SELECT count(*) AS count FROM environment_streams")[0][
-                    "count"
-                ]
-                >= 256
-            ):
-                raise StoreValidationError(
-                    "Environmental stream registry limit exceeded"
-                )
+            require_registry_slot(target, incoming["public_id"])
             columns = [key for key in incoming if key != "id"]
             rows = target.execute(
                 f"INSERT INTO environment_streams ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)}) RETURNING id",
@@ -284,6 +285,8 @@ def _replay_sleep(staging, target, counts, after_batch):
     batch = []
     size = 0
     for row in rows_by_id(staging, "sleep_sessions"):
+        if reserved(row["provider"]):
+            continue
         record_size = sum(
             len(value.encode("utf-8"))
             for value in row.values()
@@ -322,6 +325,8 @@ def _replay_recovery(staging, target, counts, after_batch):
     batch = []
     size = 0
     for row in rows_by_id(staging, "recovery_records"):
+        if reserved(row["provider"]):
+            continue
         record_size = sum(
             len(value.encode("utf-8"))
             for value in row.values()

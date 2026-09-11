@@ -5,6 +5,8 @@ import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from .bridge_models import BridgeError, reserved
+from .bridge_reconciliation import reconcile_streaming, sync_exclusions
 from .db import HealthDatabase
 from .errors import StoreValidationError
 from .models import (
@@ -102,6 +104,8 @@ class HealthRepository:
         return self._observation_from_row(result[0])
 
     def _upsert_claim(self, observation: HealthObservation) -> SourceClaim:
+        if reserved(observation.provider):
+            raise BridgeError("reserved_provider")
         metric = _require_metric(observation.metric)
         canonical = CANONICAL_UNITS[metric]
         if observation.unit != canonical:
@@ -224,14 +228,9 @@ class HealthRepository:
         metric = _require_metric(metric)
         with self._db.transaction():
             if streaming:
-                after = 0
-                while rows := self._db.execute(
-                    "SELECT * FROM source_claims WHERE person_id=? AND metric=? AND id>? ORDER BY id LIMIT 256",
-                    (person_id, metric.value, after),
-                ):
-                    for row in rows:
-                        self._reconcile_around(self._claim_from_row(row))
-                    after = rows[-1]["id"]
+                reconcile_streaming(
+                    self._db, person_id, metric, self.get_priority(metric)
+                )
                 return
             claims = self._fetch_claims(person_id, metric)
             self._apply_reconciliation(person_id, metric, claims, None, None)
@@ -393,6 +392,7 @@ class HealthRepository:
             statements.append(("DELETE FROM observations WHERE id = ?", (orphan,)))
         if statements:
             self._db.execute_batch(statements)
+        sync_exclusions(self._db)
 
     def get_observation(
         self, person_id: str, observation_id: int
@@ -574,6 +574,8 @@ class HealthRepository:
         ]
 
     def upsert_workout(self, workout: Workout) -> Workout:
+        if reserved(workout.provider):
+            raise BridgeError("reserved_provider")
         started_at = _to_stored_datetime(workout.started_at, "started_at")
         ended_at = _to_stored_datetime(workout.ended_at, "ended_at")
         if ended_at < started_at:
@@ -665,6 +667,8 @@ class HealthRepository:
         return state
 
     def set_provider_state(self, provider: str, state: dict[str, Any]) -> None:
+        if reserved(provider):
+            raise BridgeError("reserved_provider")
         if not isinstance(state, dict):
             raise StoreValidationError("provider state must be a dict")
         try:

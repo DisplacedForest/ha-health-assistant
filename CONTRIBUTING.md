@@ -95,6 +95,10 @@ Sleep's normalization, queries and repository stay independent of Home Assistant
 
 Recovery follows the same revision boundary with `CandidateRecoveryObservation` and `CandidateRecoveryDeletion`. Declare `recovery_metrics` and explicitly selected `recovery_source_ids`; both default to empty. Use `async_apply_recovery_changes`, keeping HRV methods, contexts and algorithm versions separate. See [the recovery contract](docs/recovery.md). Baseline calculations belong to the shared derived layer.
 
+Native phone producers use the [bridge protocol](docs/mobile-bridge.md), with registered `bridge:<UUID>` identities, typed hashes, durable revisions and runtime write leases. Legacy provider APIs reject this reserved namespace. The bridge repository owns scalar/workout ledgers and their projections; sleep and recovery retain their separate authoritative tables. `BridgeRuntime.register_wearable_handler(handler, tip=..., validate_pending=...)` provides the shared current-auth transaction boundary for the wearable implementation. Store modules remain independent of Home Assistant.
+
+Bridge tests use temporary SQLite stores and the supported Home Assistant test clients. They cover body limits, current authentication, complete-batch rollback, exact pending rearm, archive graph validation and source allocation. `tests/test_bridge_resources.py` measures the shared metadata budget and a 100,000-claim reconciliation with a full alternating-provider regrouping. Keep the golden wire bytes unchanged. The dev installer preserves `sparse_record`, `sparse_batch`, `wearable_batch` and `wearable_snapshot.v1` hash namespaces.
+
 ## Branch and PR flow
 
 - `main` is always releasable. All work happens on branches named like `feature/...` or `fix/...`.

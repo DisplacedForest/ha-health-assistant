@@ -25,7 +25,7 @@ find "$tmp/health_assistant_dev" -type d -name __pycache__ -prune -exec rm -rf {
 find "$tmp/health_assistant_dev" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete
 
 find "$tmp/health_assistant_dev" -type f \( -name '*.py' -o -name '*.json' -o -name '*.yaml' \) -print0 |
-  xargs -0 perl -pi -e 's/health_assistant(?!\.sparse_record\b)/health_assistant_dev/g; s/Health Assistant(?! \(Dev\))/Health Assistant (Dev)/g'
+  xargs -0 perl -pi -e 's/health_assistant(?!\.(?:sparse_record|sparse_batch|wearable_batch|wearable_snapshot\.v1)\b)/health_assistant_dev/g; s/Health Assistant(?! \(Dev\))/Health Assistant (Dev)/g'
 
 mkdir -p "$config_dir/custom_components"
 rm -rf "$dest"

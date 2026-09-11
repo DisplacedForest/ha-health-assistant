@@ -56,7 +56,7 @@ def archive_parent(root: Path, requested: str, create: bool):
         os.close(descriptor)
 
 
-def _operate(database, root, requested, importing, dry_run):
+def _operate(database, root, requested, importing, dry_run, bridge=None):
     with archive_parent(root, requested, create=not importing) as (
         descriptor,
         relative,
@@ -71,7 +71,11 @@ def _operate(database, root, requested, importing, dry_run):
                 if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
                     raise StoreValidationError("Archive input must be a regular file")
                 return import_archive(
-                    database, root / relative, dry_run=dry_run, source_file=source
+                    database,
+                    root / relative,
+                    dry_run=dry_run,
+                    source_file=source,
+                    apply_context=bridge.import_context if bridge else None,
                 )
         manifest = export_archive(database, root / relative, directory_fd=descriptor)
         return {
@@ -100,6 +104,7 @@ async def _async_history(call):
             call.data["path"],
             importing,
             dry_run,
+            entries[0].runtime_data.bridge,
         )
     except StoreValidationError as err:
         raise ServiceValidationError(str(err)) from err

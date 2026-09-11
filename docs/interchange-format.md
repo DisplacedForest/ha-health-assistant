@@ -1,6 +1,6 @@
 # Portable history format
 
-Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 8, including sleep sessions and recovery observations. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
+Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 9, including sleep, recovery, native bridge sources and sparse ledgers. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
 
 ## Actions
 
@@ -26,8 +26,10 @@ Members appear exactly once, in this order. They must be regular files, with no 
 6. `environment_streams.jsonl`
 7. `environment_buckets.jsonl`
 8. `environment_maintenance.jsonl`
-9. `sleep_sessions.jsonl` (format 2/schema 7 and 8)
-10. `recovery_records.jsonl` (format 2/schema 8 only)
+9. `sleep_sessions.jsonl` (format 2/schema 7, 8 and 9)
+10. `recovery_records.jsonl` (format 2/schema 8 and 9)
+11. `bridge_sources.jsonl` (format 2/schema 9)
+12. `bridge_records.jsonl` (format 2/schema 9)
 
 JSON is UTF-8. Each JSONL record is one object followed by a newline. Duplicate JSON keys, non-finite numbers and unknown or missing fields are rejected. Empty domains have zero-byte files. Files have no header rows. Archive readers do not extract paths supplied by the tar headers.
 
@@ -37,15 +39,29 @@ The manifest has exactly these fields:
 | --- | --- |
 | `format` | `health-assistant` |
 | `format_version` | Integer `2` |
-| `source_schema_version` | Integer `8` |
+| `source_schema_version` | Integer `9` |
 | `created_at` | ISO 8601 timestamp with timezone |
-| `files` | Object keyed by the nine JSONL filenames |
+| `files` | Object keyed by the eleven JSONL filenames |
 
 Each `files` entry contains `records`, `bytes` and a lowercase SHA-256 `sha256` for the exact uncompressed file bytes. Counts, sizes and checksums must match. The gzip trailer is checked even after the tar end marker. Checksums detect damage, but they do not authenticate the archive's author. Only import files you trust with your history.
 
-The static compatibility registry accepts format 1/schema 6, format 2/schema 7 and format 2/schema 8. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old 0.2 readers reject format 2. Schema 7 readers reject the schema 8 layout. There is no downgrade export that drops later domains.
+The static compatibility registry accepts format 1/schema 6 and separate format 2 layouts for schemas 7, 8 and 9. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old readers reject later layouts. There is no downgrade export that drops later domains.
 
 An earlier archive that lacks a later domain does not change that domain in the destination. Importing a format 1 archive leaves existing sleep and recovery payloads, exclusions, tombstones and settings alone. Schema 7 imports leave recovery alone.
+
+Layouts before schema 9 cannot write the reserved `bridge:<UUID>` namespace. Such incoming records fail with `unsupported_namespace`; valid older archives leave existing bridge history alone.
+
+## Native bridge records
+
+`bridge_sources` contains exactly `source_id`, `person_id`, `adapter_kind`, `upstream_store`, `upstream_scope`, `created_at` and `label`. UUIDs are lowercase and person is `primary`. All fields except label are immutable. Owner bindings, origin flags, retirement permissions, receipts, cursor handles, receiver sessions and leases are never portable. Unknown identities become unbound `imported_history` sources. Existing labels win, with label-retention counts in the import response. Descriptor-only identities allocate no registry slot, but immutable conflicts still fail preview.
+
+`bridge_records` contains exactly `source_id`, `domain`, `external_id`, `record_type`, `source_revision`, `hash_version`, `payload_hash`, `source_state`, `locally_excluded`, `first_ingested_at`, `last_ingested_at` and `payload`. Domain is scalar or workout. Revisions are positive decimal strings, exclusion is boolean, and ingestion times use the normalized UTC wire spelling. Deleted payloads are null. Local projection IDs are omitted. Fresh imports preserve the first and last bookkeeping times; accepted corrections merge first/last bounds without letting the last time precede the first.
+
+Every bridge claim, workout, sleep record and recovery record, including tombstones, needs its source descriptor in the same archive. Active scalar/workout ledgers and their exported projections must match one-to-one in payload, effective exclusion, person, source, external identity and timestamps. Deleted ledgers must have no projection. The complete graph and canonical relationships are validated before preview or live writes. File order cannot create an orphan source.
+
+Legacy replay skips bridge projections. Accepted ledger revisions reconstruct the authoritative projections, then reconcile affected scalar metrics in one full ordered pass. Local exclusion merges with OR even on stale content. New source descriptors are inserted inside the first dependent record batch, so failure rolls back both. Completed earlier batches remain committed and retry converges. Sleep batches are also bounded by encoded size.
+
+After a successful preview, live import suspends affected runtime leases, drains the write boundary and blocks rearm until application finishes. Accepted new source content, higher revisions and tombstones set persistent `needs_fresh_namespace` on a local enrollment. Exclusion-only changes, stale revisions and equal-revision replays do not. No import restores a checkpoint or write grant. See [the native bridge contract](mobile-bridge.md) for rearm and full-backup behavior.
 
 ## Records
 

@@ -46,6 +46,9 @@ def test_install_dev_rewrites_domain(tmp_path):
                 path.read_text()
                 .replace("health_assistant_dev", "")
                 .replace("health_assistant.sparse_record", "")
+                .replace("health_assistant.sparse_batch", "")
+                .replace("health_assistant.wearable_batch", "")
+                .replace("health_assistant.wearable_snapshot.v1", "")
             )
             assert "health_assistant" not in text
             assert "Health Assistant (Dev) (Dev)" not in path.read_text()

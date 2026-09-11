@@ -103,7 +103,7 @@ def test_full_roundtrip_uses_source_revision_and_exclusion_or(
         "created_at",
         "files",
     }
-    assert manifest["format_version"] == 2 and manifest["source_schema_version"] == 8
+    assert manifest["format_version"] == 2 and manifest["source_schema_version"] == 9
     preview = import_archive(target, path)
     assert preview["expected"]["recovery_records"]["create"] == 1
     assert preview["expected"]["recovery_records"]["deleted"] == 1
@@ -220,7 +220,7 @@ def test_archive_record_contract_rejects_invalid_fields(change):
 def test_unknown_archive_layouts_are_rejected(database, tmp_path):
     manifest = export_archive(database, tmp_path / "history.tar.gz")
     for change in (
-        {"source_schema_version": 9},
+        {"source_schema_version": 10},
         {"source_schema_version": True},
         {"schema_version": 7},
         {"format_version": 3},
@@ -283,11 +283,18 @@ def test_schema_seven_layout_leaves_recovery_unchanged(database, target, tmp_pat
         members = [
             (item.name, source.extractfile(item).read())
             for item in source
-            if item.name != "recovery_records.jsonl"
+            if item.name
+            not in (
+                "recovery_records.jsonl",
+                "bridge_sources.jsonl",
+                "bridge_records.jsonl",
+            )
         ]
     manifest = json.loads(members[0][1])
     manifest["source_schema_version"] = 7
     del manifest["files"]["recovery_records.jsonl"]
+    del manifest["files"]["bridge_sources.jsonl"]
+    del manifest["files"]["bridge_records.jsonl"]
     members[0] = ("manifest.json", json.dumps(manifest).encode())
     previous = tmp_path / "schema-seven-layout.tar.gz"
     with tarfile.open(previous, "w:gz") as output:
