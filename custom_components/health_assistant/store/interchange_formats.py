@@ -1,5 +1,7 @@
 from types import MappingProxyType
 
+from .wearable_snapshot import BUCKET_FIELDS, STREAM_FIELDS
+
 OBSERVATION_FIELDS = {
     "id",
     "person_id",
@@ -85,6 +87,8 @@ DOMAINS = LEGACY_DOMAINS + (
     "recovery_records",
     "bridge_sources",
     "bridge_records",
+    "wearable_streams",
+    "wearable_buckets",
 )
 SLEEP_FIELDS = frozenset(
     (
@@ -147,6 +151,17 @@ COMPATIBILITY = MappingProxyType(
                 "recovery_records": RECOVERY_FIELDS,
                 "bridge_sources": BRIDGE_SOURCE_FIELDS,
                 "bridge_records": BRIDGE_RECORD_FIELDS,
+            }
+        ),
+        (2, 10): MappingProxyType(
+            {
+                **LEGACY_FIELDS,
+                "sleep_sessions": SLEEP_FIELDS,
+                "recovery_records": RECOVERY_FIELDS,
+                "bridge_sources": BRIDGE_SOURCE_FIELDS,
+                "bridge_records": BRIDGE_RECORD_FIELDS,
+                "wearable_streams": frozenset(STREAM_FIELDS),
+                "wearable_buckets": frozenset(BUCKET_FIELDS),
             }
         ),
     }

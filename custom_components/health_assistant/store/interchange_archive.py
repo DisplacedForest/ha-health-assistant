@@ -90,7 +90,12 @@ def decode_record(data: bytes) -> dict:
     return result
 
 
-def snapshot_records(connection, domain: str) -> Iterator[dict]:
+def snapshot_records(connection, domain: str, snapshot_at=None) -> Iterator[dict]:
+    if domain in ("wearable_streams", "wearable_buckets"):
+        from .wearable_archive import export_records
+
+        yield from export_records(connection, domain, snapshot_at)
+        return
     cursor = connection.execute(f"SELECT * FROM {domain} ORDER BY {ORDER[domain]}")
     try:
         while rows := cursor.fetchmany(PAGE_SIZE):
@@ -134,14 +139,26 @@ def export_archive(
     ) as directory:
         temporary = Path(directory)
         snapshot = temporary / "snapshot.sqlite"
-        database.backup(snapshot)
+        snapshot_time = database.backup_with_clock(snapshot, lambda: datetime.now(UTC))
+        from .wearable import WearableRepository
+        from .wearable_models import time_us, timestamp
+
+        copied = HealthDatabase(snapshot)
+        copied.open()
+        try:
+            result = WearableRepository(copied).maintain(snapshot_time)
+            if result["degraded_streams"]:
+                raise StoreValidationError("Wearable retention could not be completed")
+        finally:
+            copied.close()
+        snapshot_at = timestamp(time_us(snapshot_time))
         connection = sqlite3.connect(snapshot)
         connection.row_factory = sqlite3.Row
         manifest = {
             "format": "health-assistant",
             "format_version": FORMAT_VERSION,
             "source_schema_version": SCHEMA_VERSION,
-            "created_at": datetime.now(UTC).isoformat(timespec="microseconds"),
+            "created_at": snapshot_at,
             "files": {},
         }
         total = 0
@@ -151,7 +168,7 @@ def export_archive(
                 digest = hashlib.sha256()
                 count = size = 0
                 with (temporary / filename).open("wb") as output:
-                    for record in snapshot_records(connection, domain):
+                    for record in snapshot_records(connection, domain, snapshot_at):
                         data = encode_record(record)
                         count += 1
                         size += len(data)
@@ -242,7 +259,11 @@ def validate_manifest(manifest: dict) -> None:
         raise StoreValidationError("Archive exceeds the 8 GiB expanded limit")
     registered = sum(
         files[name]["records"]
-        for name in ("environment_streams.jsonl", "bridge_sources.jsonl")
+        for name in (
+            "environment_streams.jsonl",
+            "bridge_sources.jsonl",
+            "wearable_streams.jsonl",
+        )
         if name in files
     )
     if registered > 256:

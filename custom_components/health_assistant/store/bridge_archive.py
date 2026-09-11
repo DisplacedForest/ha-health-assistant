@@ -319,7 +319,9 @@ def replay_bridge(staging, target, counts, after_batch):
                 after_batch(table)
     unused = sum(
         not target.execute("SELECT 1 FROM bridge_sources WHERE source_id=?", (row[0],))
-        for row in staging.iterate("SELECT source_id FROM bridge_sources")
+        for row in staging.iterate(
+            "SELECT source_id FROM bridge_sources WHERE source_id NOT IN (SELECT source_id FROM wearable_streams)"
+        )
     )
     if unused:
         counts.setdefault("bridge_sources", {"create": 0, "unchanged": 0})[

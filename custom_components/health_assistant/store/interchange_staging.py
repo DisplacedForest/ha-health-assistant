@@ -21,13 +21,23 @@ def rows_by_id(database, table, after=0):
         after = rows[-1]["id"]
 
 
-def validate_archive(path: Path, staging_path: Path):
+def validate_archive(path: Path, staging_path: Path, *, now=None):
+    from .wearable_archive import finalize_staging, prepare_staging, stage_record
+
+    now = now or datetime.now(UTC)
     staging = HealthDatabase(staging_path)
     staging.open()
     staging.execute("DELETE FROM environment_maintenance")
+    prepare_staging(staging)
     try:
 
         def consume(domain, record):
+            if domain in ("wearable_streams", "wearable_buckets"):
+                try:
+                    stage_record(staging, domain, record)
+                except (sqlite3.IntegrityError, OverflowError) as err:
+                    raise StoreValidationError("Duplicate wearable identity") from err
+                return
             if domain == "bridge_sources":
                 from .bridge_models import source_descriptor
 
@@ -35,16 +45,14 @@ def validate_archive(path: Path, staging_path: Path):
             elif domain == "bridge_records":
                 from .bridge_archive import parse_record
 
-                value = parse_record(record, datetime.now(UTC))
+                value = parse_record(record, now)
             elif domain == "sleep_sessions":
                 from .sleep import parse_archive_session, session_columns
 
-                now = datetime.now(UTC)
                 value = session_columns(parse_archive_session(record, now), now)
             elif domain == "recovery_records":
                 from .recovery import observation_columns, parse_archive_observation
 
-                now = datetime.now(UTC)
                 value = observation_columns(parse_archive_observation(record, now), now)
             else:
                 value = validate_record(domain, record)
@@ -70,6 +78,7 @@ def validate_archive(path: Path, staging_path: Path):
             manifest = read_archive(path, consume)
             from .bridge_archive import validate_graph
 
+            finalize_staging(staging, now, snapshot_at=manifest["created_at"])
             validate_graph(staging, manifest)
             _validate_relations(staging)
             _validate_canonical(staging)

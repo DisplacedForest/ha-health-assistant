@@ -1,6 +1,6 @@
 # Portable history format
 
-Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 9, including sleep, recovery, native bridge sources and sparse ledgers. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
+Format 2 is a gzip-compressed tar archive produced by `health_assistant.export_history` and read by `health_assistant.import_history`. It carries the logical history stored by database schema 10, including sleep, recovery, native bridge sources, sparse ledgers and wearable intervals. The frozen format 1/schema 6 reader remains available for 0.2 archives. It is separate from the database backup format. No schema migration is part of importing an archive.
 
 ## Actions
 
@@ -10,7 +10,7 @@ Both actions require a Home Assistant administrator. `path` names a `.tar.gz` fi
 
 `import_history` takes `dry_run`, which defaults to `true`. It first copies the input into private staging, validates the complete archive, then simulates the merge against a database snapshot. Validation or simulation failure leaves the live database unchanged. A dry run stops there. Set `dry_run: false` to apply the validated history. The health phase is atomic; later domains use bounded transaction batches.
 
-The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout, active sleep and recovery bounds, and environmental bucket bounds. Bucket bounds do not imply complete sensor coverage.
+The response contains archive counts, a date span, source names and expected create, merge and unchanged counts. Priorities are counted by metric group, not by individual rank row. Canonical observation counts are shown before and after the simulated merge; source claims determine the final canonical count. Sources are limited to 100 entries and display labels to 256 characters, with truncation flags. Full identities are retained for storage and matching. The date span uses observation times, workout, active sleep and recovery bounds, and environmental and wearable bucket bounds. Bucket bounds do not imply complete sensor coverage.
 
 The applied response also contains actual write counts. Those counts can differ from the preview if ingestion changed the database between simulation and application. Imported priorities apply even when a metric has no incoming readings. An empty priority list resets that metric to the store's default ordering.
 
@@ -26,10 +26,12 @@ Members appear exactly once, in this order. They must be regular files, with no 
 6. `environment_streams.jsonl`
 7. `environment_buckets.jsonl`
 8. `environment_maintenance.jsonl`
-9. `sleep_sessions.jsonl` (format 2/schema 7, 8 and 9)
-10. `recovery_records.jsonl` (format 2/schema 8 and 9)
-11. `bridge_sources.jsonl` (format 2/schema 9)
-12. `bridge_records.jsonl` (format 2/schema 9)
+9. `sleep_sessions.jsonl` (format 2/schema 7 through 10)
+10. `recovery_records.jsonl` (format 2/schema 8 through 10)
+11. `bridge_sources.jsonl` (format 2/schema 9 and 10)
+12. `bridge_records.jsonl` (format 2/schema 9 and 10)
+13. `wearable_streams.jsonl` (format 2/schema 10)
+14. `wearable_buckets.jsonl` (format 2/schema 10)
 
 JSON is UTF-8. Each JSONL record is one object followed by a newline. Duplicate JSON keys, non-finite numbers and unknown or missing fields are rejected. Empty domains have zero-byte files. Files have no header rows. Archive readers do not extract paths supplied by the tar headers.
 
@@ -39,13 +41,13 @@ The manifest has exactly these fields:
 | --- | --- |
 | `format` | `health-assistant` |
 | `format_version` | Integer `2` |
-| `source_schema_version` | Integer `9` |
+| `source_schema_version` | Integer `10` |
 | `created_at` | ISO 8601 timestamp with timezone |
-| `files` | Object keyed by the eleven JSONL filenames |
+| `files` | Object keyed by the thirteen JSONL filenames |
 
 Each `files` entry contains `records`, `bytes` and a lowercase SHA-256 `sha256` for the exact uncompressed file bytes. Counts, sizes and checksums must match. The gzip trailer is checked even after the tar end marker. Checksums detect damage, but they do not authenticate the archive's author. Only import files you trust with your history.
 
-The static compatibility registry accepts format 1/schema 6 and separate format 2 layouts for schemas 7, 8 and 9. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old readers reject later layouts. There is no downgrade export that drops later domains.
+The static compatibility registry accepts format 1/schema 6 and separate format 2 layouts for schemas 7, 8, 9 and 10. Format 1 retains its original `schema_version` manifest field, seven domains and exact record definitions. Format 2 uses `source_schema_version`. Higher or mixed versions are rejected before live writes. A future layout must have its own registry entry and implemented validation; changing a manifest version is not a conversion. Old readers reject later layouts. There is no downgrade export that drops later domains.
 
 An earlier archive that lacks a later domain does not change that domain in the destination. Importing a format 1 archive leaves existing sleep and recovery payloads, exclusions, tombstones and settings alone. Schema 7 imports leave recovery alone.
 
@@ -57,7 +59,7 @@ Layouts before schema 9 cannot write the reserved `bridge:<UUID>` namespace. Suc
 
 `bridge_records` contains exactly `source_id`, `domain`, `external_id`, `record_type`, `source_revision`, `hash_version`, `payload_hash`, `source_state`, `locally_excluded`, `first_ingested_at`, `last_ingested_at` and `payload`. Domain is scalar or workout. Revisions are positive decimal strings, exclusion is boolean, and ingestion times use the normalized UTC wire spelling. Deleted payloads are null. Local projection IDs are omitted. Fresh imports preserve the first and last bookkeeping times; accepted corrections merge first/last bounds without letting the last time precede the first.
 
-Every bridge claim, workout, sleep record and recovery record, including tombstones, needs its source descriptor in the same archive. Active scalar/workout ledgers and their exported projections must match one-to-one in payload, effective exclusion, person, source, external identity and timestamps. Deleted ledgers must have no projection. The complete graph and canonical relationships are validated before preview or live writes. File order cannot create an orphan source.
+Every bridge claim, workout, sleep record, recovery record and wearable stream, including sparse tombstones, needs its source descriptor in the same archive. Active scalar/workout ledgers and their exported projections must match one-to-one in payload, effective exclusion, person, source, external identity and timestamps. Deleted ledgers must have no projection. The complete graph and canonical relationships are validated before preview or live writes. File order cannot create an orphan source.
 
 Legacy replay skips bridge projections. Accepted ledger revisions reconstruct the authoritative projections, then reconcile affected scalar metrics in one full ordered pass. Local exclusion merges with OR even on stale content. New source descriptors are inserted inside the first dependent record batch, so failure rolls back both. Completed earlier batches remain committed and retry converges. Sleep batches are also bounded by encoded size.
 
@@ -106,11 +108,21 @@ After the existing domains, sleep is replayed in batches of at most 100 sessions
 
 Recovery replay uses source revision and hash, with sticky exclusion OR even on a stale payload. Metric reuse under one source identity is invalid. A full validation and simulated replay precede any live writes. Recovery batches have at most 100 records and 1 MiB, and commit independently after sleep. A conflict found in preview starts no live writes; earlier completed phases can survive an interruption during apply. Counts distinguish create, update, stale, unchanged, deleted and exclusion_change. Import never grants provider permissions.
 
+## Wearable snapshots
+
+Wearable streams carry public stream and source UUIDs, heart-rate metric and unit, weighting, nullable algorithm fields, retirement state, sequence, last accepted content hash and a complete snapshot. The snapshot includes its clock, row count and SHA-256 over the descriptor and all ordered buckets. The complete field list, numeric limits and hash framing are defined in [wearable history](wearable-series.md). Ownership, receiver sessions and write leases are never exported.
+
+The exporter takes its clock and SQLite backup under the same store lock. Retention runs on that temporary copy using the pinned clock; the live database is untouched. Every stream's snapshot clock must match the manifest creation time. Import validates every descriptor and bucket, including skipped older snapshots, before any live write. Retention then uses one pinned import clock throughout preview and apply.
+
+Each newer stream snapshot replaces its complete retained body and tip in one transaction. An equal tip leaves the current body alone, including missing keys; an equal sequence with a different content hash is a conflict. Older snapshots cannot fill gaps or undo deletion. Retirement merges monotonically. Missing source metadata is inserted in the same transaction as its first dependent stream. A failure rolls back that stream, while earlier completed streams remain committed and can be retried.
+
+Applying an archive pauses affected source leases until an explicit continuity rearm. A missing stream becomes imported history, even when its source already exists locally. Imported identities remain read-only and cannot be adopted for capture. Schema 9 and earlier archives leave wearable history untouched.
+
 ## Merge and recovery
 
 Health claims match by provider, external ID, metric and observation time. Workouts match by provider and external ID. A matching identity belonging to a different person is rejected. For the same identity, the later `ingested_at` wins; an equal timestamp uses the incoming record. If either side is excluded, the merged record is excluded. Reconciliation also preserves exclusions across the resulting canonical group. Import never uses a replay to restore an excluded reading.
 
-Existing records absent from the archive are retained. Repeating the same archive against an unchanged destination produces no creates or merges. Overlapping exports merge by the same identities rather than adding copies. Imported priorities are used for final reconciliation and can change which retained source supplies a current value.
+Existing sparse records and streams absent from the archive are retained. For a newer wearable stream snapshot, absent interval keys represent deletion and are removed. Repeating the same archive against an unchanged destination produces no creates or merges. Overlapping exports merge by the same identities rather than adding copies. Imported priorities are used for final reconciliation and can change which retained source supplies a current value.
 
 Environmental public IDs must have identical metadata on both sides. The registry remains capped at 256 active or historical streams. Bucket identity is the mapped stream, resolution and start time. Identical buckets are unchanged. A later `updated_ms` wins at the same resolution; equal update bounds with different contents are rejected as ambiguous. This time bound is not a general provider revision number.
 

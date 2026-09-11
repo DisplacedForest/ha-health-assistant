@@ -40,7 +40,10 @@ def import_archive(
                         "Archive exceeds the 2 GiB compressed limit"
                     )
                 target.write(data)
-        staging, manifest = validate_archive(copied, temporary / "archive.sqlite")
+        now = datetime.now(UTC)
+        staging, manifest = validate_archive(
+            copied, temporary / "archive.sqlite", now=now
+        )
         try:
             preview_path = temporary / "preview.sqlite"
             database.backup(preview_path)
@@ -50,7 +53,7 @@ def import_archive(
                 before = preview.execute("SELECT count(*) AS count FROM observations")[
                     0
                 ]["count"]
-                expected = replay_archive(staging, preview)
+                expected = replay_archive(staging, preview, now=now)
                 after = preview.execute("SELECT count(*) AS count FROM observations")[
                     0
                 ]["count"]
@@ -69,14 +72,14 @@ def import_archive(
                 required_sources = [
                     row[0]
                     for row in staging.execute(
-                        "SELECT source_id FROM bridge_records UNION SELECT source_id FROM sleep_sessions WHERE provider='bridge:'||source_id UNION SELECT source_id FROM recovery_records WHERE provider='bridge:'||source_id"
+                        "SELECT source_id FROM bridge_records UNION SELECT source_id FROM wearable_streams UNION SELECT source_id FROM sleep_sessions WHERE provider='bridge:'||source_id UNION SELECT source_id FROM recovery_records WHERE provider='bridge:'||source_id"
                     )
                 ]
                 with (
                     apply_context(required_sources) if apply_context else nullcontext()
                 ):
                     summary["applied"] = replay_archive(
-                        staging, database, after_batch=after_batch
+                        staging, database, after_batch=after_batch, now=now
                     )
             return summary
         finally:
@@ -84,7 +87,7 @@ def import_archive(
 
 
 def _summary(staging, manifest):
-    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams UNION SELECT provider FROM sleep_sessions UNION SELECT provider FROM recovery_records"
+    sources_sql = "SELECT provider AS source FROM source_claims UNION SELECT provider FROM workouts UNION SELECT source_id FROM environment_streams UNION SELECT provider FROM sleep_sessions UNION SELECT provider FROM recovery_records UNION SELECT 'bridge:'||source_id FROM wearable_streams"
     sources = [
         row["source"]
         for row in staging.execute(
@@ -111,6 +114,16 @@ def _summary(staging, manifest):
         ).isoformat(timespec="microseconds")
         first = min(first, environmental_first) if first else environmental_first
         last = max(last, environmental_last) if last else environmental_last
+    wearable = staging.execute(
+        "SELECT min(start_us) AS first,max(start_us+resolution_s*1000000) AS last FROM wearable_buckets"
+    )[0]
+    if wearable["first"] is not None:
+        from .wearable_models import timestamp
+
+        wearable_first = timestamp(wearable["first"]).replace("Z", "+00:00")
+        wearable_last = timestamp(wearable["last"]).replace("Z", "+00:00")
+        first = min(first, wearable_first) if first else wearable_first
+        last = max(last, wearable_last) if last else wearable_last
     return {
         "format_version": manifest["format_version"],
         "archive_created_at": manifest["created_at"],

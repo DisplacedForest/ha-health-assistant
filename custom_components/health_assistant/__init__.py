@@ -31,6 +31,9 @@ from .store import (
     StoreError,
     StoreVersionError,
 )
+from .wearable_admin import async_register_wearable_admin
+from .wearable_runtime import WearableRuntime
+from .wearable_websocket import async_register_wearable_websocket
 from .websocket_api import async_register_websocket_api
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
@@ -44,6 +47,7 @@ class HealthAssistantData:
     coordinator: HealthSummaryCoordinator
     environment: EnvironmentalCapture
     bridge: BridgeRuntime | None = None
+    wearable: WearableRuntime | None = None
 
 
 type HealthAssistantConfigEntry = ConfigEntry[HealthAssistantData]
@@ -111,6 +115,9 @@ async def async_setup_entry(
         environment=environment,
         bridge=BridgeRuntime(hass, database),
     )
+    entry.runtime_data.wearable = WearableRuntime(
+        hass, database, entry.runtime_data.bridge
+    )
     await coordinator.async_config_entry_first_refresh()
 
     async def _async_data_updated() -> None:
@@ -123,10 +130,13 @@ async def async_setup_entry(
     async_setup_services(hass)
     async_register_websocket_api(hass)
     async_register_bridge_api(hass)
+    async_register_wearable_admin(hass)
+    async_register_wearable_websocket(hass)
     await async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await registry.async_start()
     await environment.async_start()
+    await entry.runtime_data.wearable.async_start()
     return True
 
 
@@ -137,6 +147,8 @@ async def async_unload_entry(
     if unload_ok:
         if entry.runtime_data.bridge is not None:
             await entry.runtime_data.bridge.async_stop()
+        if entry.runtime_data.wearable is not None:
+            await entry.runtime_data.wearable.async_stop()
         await entry.runtime_data.environment.async_stop()
         await entry.runtime_data.registry.async_stop()
         async_remove_panel(hass)

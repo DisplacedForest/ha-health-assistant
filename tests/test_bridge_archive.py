@@ -62,7 +62,7 @@ def test_bridge_roundtrip_projections_tombstones_and_no_permissions(
     )
     archive = tmp_path / "history.tar.gz"
     manifest = export_archive(repository.database, archive)
-    assert manifest["source_schema_version"] == 9
+    assert manifest["source_schema_version"] == 10
     preview = import_archive(target, archive)
     assert preview["expected"]["bridge_records"]["changed"] == 2
     assert not target.execute("SELECT * FROM bridge_sources")
@@ -287,7 +287,12 @@ def test_legacy_layout_cannot_bypass_bridge_ledger(bridge, target, tmp_path):
 
     def edit(parts, manifest):
         manifest["source_schema_version"] = 8
-        for domain in ("bridge_sources.jsonl", "bridge_records.jsonl"):
+        for domain in (
+            "bridge_sources.jsonl",
+            "bridge_records.jsonl",
+            "wearable_streams.jsonl",
+            "wearable_buckets.jsonl",
+        ):
             del parts[domain]
             del manifest["files"][domain]
 

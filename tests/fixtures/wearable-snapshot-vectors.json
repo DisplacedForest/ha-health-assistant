@@ -1,0 +1,259 @@
+{
+  "status": "cross_language_framing_verified_not_production_validator",
+  "framing": "UTF8(health_assistant.wearable_snapshot.v1)+LF+JCS(descriptor_without_snapshot_hash)+LF+each_sorted_JCS_bucket+LF",
+  "python": "3.14.6; rfc8785==0.1.4",
+  "node": "22.23.2; canonicalize==4.0.0",
+  "native_tip_projection": {
+    "hash_scope": "health_assistant.wearable_batch",
+    "hash_version": 1,
+    "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+    "expected_sequence": "0",
+    "sequence": "1",
+    "operations": [
+      {
+        "op": "replace",
+        "start": "2026-08-31T00:00:00.000000Z",
+        "resolution": 60,
+        "count": "2",
+        "sum": 140,
+        "min": 60,
+        "max": 80
+      },
+      {
+        "op": "replace",
+        "start": "2026-08-31T00:01:00.000000Z",
+        "resolution": 60,
+        "count": "1",
+        "sum": 90,
+        "min": 90,
+        "max": 90
+      }
+    ]
+  },
+  "native_tip_hash": "a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a",
+  "vectors": [
+    {
+      "input": {
+        "name": "empty_sequence_zero",
+        "descriptor": {
+          "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+          "source_id": "c6b7d86d-37ab-4442-abdc-61f74534d3f3",
+          "metric": "heart_rate",
+          "unit": "bpm",
+          "weighting": "sample",
+          "algorithm_id": null,
+          "algorithm_version": null,
+          "retired": false,
+          "sequence": "0",
+          "hash_version": 1,
+          "content_hash": null,
+          "snapshot_at": "2026-09-06T23:59:00.000000Z",
+          "snapshot_bucket_count": 0
+        },
+        "buckets": [],
+        "valid_snapshot_shape": true
+      },
+      "verified": {
+        "name": "empty_sequence_zero",
+        "framed_utf8": "health_assistant.wearable_snapshot.v1\n{\"algorithm_id\":null,\"algorithm_version\":null,\"content_hash\":null,\"hash_version\":1,\"metric\":\"heart_rate\",\"retired\":false,\"sequence\":\"0\",\"snapshot_at\":\"2026-09-06T23:59:00.000000Z\",\"snapshot_bucket_count\":0,\"source_id\":\"c6b7d86d-37ab-4442-abdc-61f74534d3f3\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"unit\":\"bpm\",\"weighting\":\"sample\"}\n",
+        "framed_hex": "6865616c74685f617373697374616e742e7765617261626c655f736e617073686f742e76310a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74656e745f68617368223a6e756c6c2c22686173685f76657273696f6e223a312c226d6574726963223a2268656172745f72617465222c2272657469726564223a66616c73652c2273657175656e6365223a2230222c22736e617073686f745f6174223a22323032362d30392d30365432333a35393a30302e3030303030305a222c22736e617073686f745f6275636b65745f636f756e74223a302c22736f757263655f6964223a2263366237643836642d333761622d343434322d616264632d363166373435333464336633222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c22756e6974223a2262706d222c22776569676874696e67223a2273616d706c65227d0a",
+        "sha256": "dd90a18d751a618a4a330dffd0c73ac52ec668f6b4f36ff4b85d12bdaab50f4e"
+      }
+    },
+    {
+      "input": {
+        "name": "two_minute_rows",
+        "descriptor": {
+          "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+          "source_id": "c6b7d86d-37ab-4442-abdc-61f74534d3f3",
+          "metric": "heart_rate",
+          "unit": "bpm",
+          "weighting": "sample",
+          "algorithm_id": null,
+          "algorithm_version": null,
+          "retired": false,
+          "sequence": "1",
+          "hash_version": 1,
+          "content_hash": "a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a",
+          "snapshot_at": "2026-09-06T23:59:00.000000Z",
+          "snapshot_bucket_count": 2
+        },
+        "buckets": [
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:00:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "2",
+            "sample_sum": 140,
+            "minimum": 60,
+            "maximum": 80,
+            "covered_us": null,
+            "weighted_sum": null
+          },
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:01:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "1",
+            "sample_sum": 90,
+            "minimum": 90,
+            "maximum": 90,
+            "covered_us": null,
+            "weighted_sum": null
+          }
+        ],
+        "valid_snapshot_shape": true
+      },
+      "verified": {
+        "name": "two_minute_rows",
+        "framed_utf8": "health_assistant.wearable_snapshot.v1\n{\"algorithm_id\":null,\"algorithm_version\":null,\"content_hash\":\"a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a\",\"hash_version\":1,\"metric\":\"heart_rate\",\"retired\":false,\"sequence\":\"1\",\"snapshot_at\":\"2026-09-06T23:59:00.000000Z\",\"snapshot_bucket_count\":2,\"source_id\":\"c6b7d86d-37ab-4442-abdc-61f74534d3f3\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"unit\":\"bpm\",\"weighting\":\"sample\"}\n{\"covered_us\":null,\"maximum\":80,\"minimum\":60,\"resolution_s\":60,\"sample_count\":\"2\",\"sample_sum\":140,\"start\":\"2026-08-31T00:00:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n{\"covered_us\":null,\"maximum\":90,\"minimum\":90,\"resolution_s\":60,\"sample_count\":\"1\",\"sample_sum\":90,\"start\":\"2026-08-31T00:01:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n",
+        "framed_hex": "6865616c74685f617373697374616e742e7765617261626c655f736e617073686f742e76310a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74656e745f68617368223a2261396133333236383433663734613136326436636462626136313566646464373532306465663933643239343565313336336366383664386432333165613161222c22686173685f76657273696f6e223a312c226d6574726963223a2268656172745f72617465222c2272657469726564223a66616c73652c2273657175656e6365223a2231222c22736e617073686f745f6174223a22323032362d30392d30365432333a35393a30302e3030303030305a222c22736e617073686f745f6275636b65745f636f756e74223a322c22736f757263655f6964223a2263366237643836642d333761622d343434322d616264632d363166373435333464336633222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c22756e6974223a2262706d222c22776569676874696e67223a2273616d706c65227d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a38302c226d696e696d756d223a36302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2232222c2273616d706c655f73756d223a3134302c227374617274223a22323032362d30382d33315430303a30303a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a39302c226d696e696d756d223a39302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2231222c2273616d706c655f73756d223a39302c227374617274223a22323032362d30382d33315430303a30313a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a",
+        "sha256": "9481e860a8c0532e1bf8db31d3bf3adef996b7d24eeadef99a7152590f284c69"
+      }
+    },
+    {
+      "input": {
+        "name": "compacted_same_source_tip",
+        "descriptor": {
+          "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+          "source_id": "c6b7d86d-37ab-4442-abdc-61f74534d3f3",
+          "metric": "heart_rate",
+          "unit": "bpm",
+          "weighting": "sample",
+          "algorithm_id": null,
+          "algorithm_version": null,
+          "retired": false,
+          "sequence": "1",
+          "hash_version": 1,
+          "content_hash": "a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a",
+          "snapshot_at": "2026-09-08T00:00:00.000000Z",
+          "snapshot_bucket_count": 1
+        },
+        "buckets": [
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:00:00.000000Z",
+            "resolution_s": 300,
+            "sample_count": "3",
+            "sample_sum": 230,
+            "minimum": 60,
+            "maximum": 90,
+            "covered_us": null,
+            "weighted_sum": null
+          }
+        ],
+        "valid_snapshot_shape": true
+      },
+      "verified": {
+        "name": "compacted_same_source_tip",
+        "framed_utf8": "health_assistant.wearable_snapshot.v1\n{\"algorithm_id\":null,\"algorithm_version\":null,\"content_hash\":\"a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a\",\"hash_version\":1,\"metric\":\"heart_rate\",\"retired\":false,\"sequence\":\"1\",\"snapshot_at\":\"2026-09-08T00:00:00.000000Z\",\"snapshot_bucket_count\":1,\"source_id\":\"c6b7d86d-37ab-4442-abdc-61f74534d3f3\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"unit\":\"bpm\",\"weighting\":\"sample\"}\n{\"covered_us\":null,\"maximum\":90,\"minimum\":60,\"resolution_s\":300,\"sample_count\":\"3\",\"sample_sum\":230,\"start\":\"2026-08-31T00:00:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n",
+        "framed_hex": "6865616c74685f617373697374616e742e7765617261626c655f736e617073686f742e76310a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74656e745f68617368223a2261396133333236383433663734613136326436636462626136313566646464373532306465663933643239343565313336336366383664386432333165613161222c22686173685f76657273696f6e223a312c226d6574726963223a2268656172745f72617465222c2272657469726564223a66616c73652c2273657175656e6365223a2231222c22736e617073686f745f6174223a22323032362d30392d30385430303a30303a30302e3030303030305a222c22736e617073686f745f6275636b65745f636f756e74223a312c22736f757263655f6964223a2263366237643836642d333761622d343434322d616264632d363166373435333464336633222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c22756e6974223a2262706d222c22776569676874696e67223a2273616d706c65227d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a39302c226d696e696d756d223a36302c227265736f6c7574696f6e5f73223a3330302c2273616d706c655f636f756e74223a2233222c2273616d706c655f73756d223a3233302c227374617274223a22323032362d30382d33315430303a30303a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a",
+        "sha256": "3fb4cd5d8c3834a390328835e7c55090809c8554868aa0cebed5a91e86d0833b"
+      }
+    },
+    {
+      "input": {
+        "name": "declared_count_tamper",
+        "descriptor": {
+          "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+          "source_id": "c6b7d86d-37ab-4442-abdc-61f74534d3f3",
+          "metric": "heart_rate",
+          "unit": "bpm",
+          "weighting": "sample",
+          "algorithm_id": null,
+          "algorithm_version": null,
+          "retired": false,
+          "sequence": "1",
+          "hash_version": 1,
+          "content_hash": "a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a",
+          "snapshot_at": "2026-09-06T23:59:00.000000Z",
+          "snapshot_bucket_count": 3
+        },
+        "buckets": [
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:00:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "2",
+            "sample_sum": 140,
+            "minimum": 60,
+            "maximum": 80,
+            "covered_us": null,
+            "weighted_sum": null
+          },
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:01:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "1",
+            "sample_sum": 90,
+            "minimum": 90,
+            "maximum": 90,
+            "covered_us": null,
+            "weighted_sum": null
+          }
+        ],
+        "valid_snapshot_shape": false,
+        "expected_validation_error": "snapshot_count_mismatch"
+      },
+      "verified": {
+        "name": "declared_count_tamper",
+        "framed_utf8": "health_assistant.wearable_snapshot.v1\n{\"algorithm_id\":null,\"algorithm_version\":null,\"content_hash\":\"a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a\",\"hash_version\":1,\"metric\":\"heart_rate\",\"retired\":false,\"sequence\":\"1\",\"snapshot_at\":\"2026-09-06T23:59:00.000000Z\",\"snapshot_bucket_count\":3,\"source_id\":\"c6b7d86d-37ab-4442-abdc-61f74534d3f3\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"unit\":\"bpm\",\"weighting\":\"sample\"}\n{\"covered_us\":null,\"maximum\":80,\"minimum\":60,\"resolution_s\":60,\"sample_count\":\"2\",\"sample_sum\":140,\"start\":\"2026-08-31T00:00:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n{\"covered_us\":null,\"maximum\":90,\"minimum\":90,\"resolution_s\":60,\"sample_count\":\"1\",\"sample_sum\":90,\"start\":\"2026-08-31T00:01:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n",
+        "framed_hex": "6865616c74685f617373697374616e742e7765617261626c655f736e617073686f742e76310a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74656e745f68617368223a2261396133333236383433663734613136326436636462626136313566646464373532306465663933643239343565313336336366383664386432333165613161222c22686173685f76657273696f6e223a312c226d6574726963223a2268656172745f72617465222c2272657469726564223a66616c73652c2273657175656e6365223a2231222c22736e617073686f745f6174223a22323032362d30392d30365432333a35393a30302e3030303030305a222c22736e617073686f745f6275636b65745f636f756e74223a332c22736f757263655f6964223a2263366237643836642d333761622d343434322d616264632d363166373435333464336633222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c22756e6974223a2262706d222c22776569676874696e67223a2273616d706c65227d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a38302c226d696e696d756d223a36302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2232222c2273616d706c655f73756d223a3134302c227374617274223a22323032362d30382d33315430303a30303a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a39302c226d696e696d756d223a39302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2231222c2273616d706c655f73756d223a39302c227374617274223a22323032362d30382d33315430303a30313a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a",
+        "sha256": "c53e3a0ad8a0dc3c19be2006514b84905cb5a049e323c4274ecff8eb05d9dd30"
+      }
+    },
+    {
+      "input": {
+        "name": "retired_same_rows",
+        "descriptor": {
+          "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+          "source_id": "c6b7d86d-37ab-4442-abdc-61f74534d3f3",
+          "metric": "heart_rate",
+          "unit": "bpm",
+          "weighting": "sample",
+          "algorithm_id": null,
+          "algorithm_version": null,
+          "retired": true,
+          "sequence": "1",
+          "hash_version": 1,
+          "content_hash": "a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a",
+          "snapshot_at": "2026-09-06T23:59:00.000000Z",
+          "snapshot_bucket_count": 2
+        },
+        "buckets": [
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:00:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "2",
+            "sample_sum": 140,
+            "minimum": 60,
+            "maximum": 80,
+            "covered_us": null,
+            "weighted_sum": null
+          },
+          {
+            "stream_id": "7f6de621-cad2-4be4-b33a-544a935050b1",
+            "start": "2026-08-31T00:01:00.000000Z",
+            "resolution_s": 60,
+            "sample_count": "1",
+            "sample_sum": 90,
+            "minimum": 90,
+            "maximum": 90,
+            "covered_us": null,
+            "weighted_sum": null
+          }
+        ],
+        "valid_snapshot_shape": true
+      },
+      "verified": {
+        "name": "retired_same_rows",
+        "framed_utf8": "health_assistant.wearable_snapshot.v1\n{\"algorithm_id\":null,\"algorithm_version\":null,\"content_hash\":\"a9a3326843f74a162d6cdbba615fddd7520def93d2945e1363cf86d8d231ea1a\",\"hash_version\":1,\"metric\":\"heart_rate\",\"retired\":true,\"sequence\":\"1\",\"snapshot_at\":\"2026-09-06T23:59:00.000000Z\",\"snapshot_bucket_count\":2,\"source_id\":\"c6b7d86d-37ab-4442-abdc-61f74534d3f3\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"unit\":\"bpm\",\"weighting\":\"sample\"}\n{\"covered_us\":null,\"maximum\":80,\"minimum\":60,\"resolution_s\":60,\"sample_count\":\"2\",\"sample_sum\":140,\"start\":\"2026-08-31T00:00:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n{\"covered_us\":null,\"maximum\":90,\"minimum\":90,\"resolution_s\":60,\"sample_count\":\"1\",\"sample_sum\":90,\"start\":\"2026-08-31T00:01:00.000000Z\",\"stream_id\":\"7f6de621-cad2-4be4-b33a-544a935050b1\",\"weighted_sum\":null}\n",
+        "framed_hex": "6865616c74685f617373697374616e742e7765617261626c655f736e617073686f742e76310a7b22616c676f726974686d5f6964223a6e756c6c2c22616c676f726974686d5f76657273696f6e223a6e756c6c2c22636f6e74656e745f68617368223a2261396133333236383433663734613136326436636462626136313566646464373532306465663933643239343565313336336366383664386432333165613161222c22686173685f76657273696f6e223a312c226d6574726963223a2268656172745f72617465222c2272657469726564223a747275652c2273657175656e6365223a2231222c22736e617073686f745f6174223a22323032362d30392d30365432333a35393a30302e3030303030305a222c22736e617073686f745f6275636b65745f636f756e74223a322c22736f757263655f6964223a2263366237643836642d333761622d343434322d616264632d363166373435333464336633222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c22756e6974223a2262706d222c22776569676874696e67223a2273616d706c65227d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a38302c226d696e696d756d223a36302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2232222c2273616d706c655f73756d223a3134302c227374617274223a22323032362d30382d33315430303a30303a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a7b22636f76657265645f7573223a6e756c6c2c226d6178696d756d223a39302c226d696e696d756d223a39302c227265736f6c7574696f6e5f73223a36302c2273616d706c655f636f756e74223a2231222c2273616d706c655f73756d223a39302c227374617274223a22323032362d30382d33315430303a30313a30302e3030303030305a222c2273747265616d5f6964223a2237663664653632312d636164322d346265342d623333612d353434613933353035306231222c2277656967687465645f73756d223a6e756c6c7d0a",
+        "sha256": "9e5bbaa4e6e8d53f17f1316099e9c97075f991b963495939c9edef6e9f689b2f"
+      }
+    }
+  ],
+  "limits": "4 candidate-valid snapshot shapes and1 deliberately invalid declared-count tamper. UUID form and row counts checked; no production archive validator or HA importer executed."
+}
