@@ -92,10 +92,19 @@ def fresh_namespace(
 async def ws_wearable_admin(hass, connection, msg):
     from .bridge_api import connection_auth, runtime
 
-    authorized = partial(connection_auth, hass, connection, admin=True)
+    permission = partial(connection_auth, hass, connection, admin=True)
     try:
-        authorized()
+        permission()
         bridge = runtime(hass)
+        owner = None
+
+        def authorized():
+            permission()
+            if bridge._stopped:
+                raise BridgeError("not_loaded")
+            if owner is not None and not owner.is_active:
+                raise BridgeError("unauthorized")
+
         repository = WearableRepository(bridge.database)
         parameters = msg["parameters"]
         action = msg["action"]
@@ -138,6 +147,12 @@ async def ws_wearable_admin(hass, connection, msg):
         elif action == "fresh_namespace":
             exact(parameters, ("registration_id", "capture_mode", "stream_ids"))
             source_id = parameters["registration_id"]
+            source = await hass.async_add_executor_job(bridge.registry.get, source_id)
+            if source["owner_id"] is None:
+                raise BridgeError("registration_paused")
+            owner = await hass.auth.async_get_user(source["owner_id"])
+            if owner is None or not owner.is_active:
+                raise BridgeError("unauthorized")
             async with bridge.suspend_import([source_id]):
                 result = await hass.async_add_executor_job(
                     partial(

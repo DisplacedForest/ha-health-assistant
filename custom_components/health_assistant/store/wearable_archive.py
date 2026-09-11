@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from .bridge_models import SOURCE_FIELDS
-from .bridge_registry import require_registry_slot
+from .bridge_registry import registry_count, require_registry_slot
 from .wearable import BUCKET_COLUMNS, WearableRepository, bucket_from_row, bucket_values
 from .wearable_models import WearableError, exact_fields, time_us, uuid_value
 from .wearable_snapshot import (
@@ -44,11 +44,14 @@ def stage_record(database, domain, record):
 
 
 def finalize_staging(database, now):
+    count = database.execute("SELECT COUNT(*) FROM wearable_archive_descriptors")[0][0]
+    if registry_count(database) + count > 256:
+        raise WearableError("registry_capacity")
     if database.execute(
         "SELECT 1 FROM wearable_archive_rows r LEFT JOIN wearable_archive_descriptors d ON d.stream_id=r.stream_id WHERE d.stream_id IS NULL LIMIT 1"
     ):
         raise WearableError("missing_stream_descriptor")
-    for record in database.execute(
+    for record in database.iterate(
         "SELECT descriptor FROM wearable_archive_descriptors ORDER BY stream_id"
     ):
         descriptor = json.loads(record[0])

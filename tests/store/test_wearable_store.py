@@ -695,3 +695,24 @@ def test_fresh_namespace_auth_loss_rolls_back_new_ids_and_retirement(wearable):
     assert registry_count(repository.database) == 2
     assert not repository.get(stream_id)["retired"]
     assert not BridgeRegistry(repository.database).get(source["source_id"])["retired"]
+
+
+def test_rejected_archive_descriptor_count_has_bounded_validation_memory(wearable):
+    repository, _, _ = wearable
+    descriptor, _, _ = snapshot(wearable)
+    database = repository.database
+    with database.transaction():
+        prepare_staging(database)
+        for _ in range(5000):
+            incoming = {**descriptor, "stream_id": str(uuid4())}
+            incoming["snapshot_hash"] = snapshot_hash(incoming, [])
+            stage_record(database, "wearable_streams", incoming)
+    tracemalloc.start()
+    try:
+        with pytest.raises(WearableError, match="registry_capacity"):
+            finalize_staging(database, NOW)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 512 * 1024
+    assert registry_count(database) == 2
