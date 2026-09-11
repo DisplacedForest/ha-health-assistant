@@ -253,15 +253,20 @@ class BridgeRuntime:
                 raise BridgeError("registration_paused")
 
         async with self._locks.setdefault(source_id, asyncio.Lock()):
-            acknowledged = await self.hass.async_add_executor_job(
-                partial(
-                    self._prepare_rearm,
-                    source_id,
-                    owner_id,
-                    value,
-                    lambda: self._loop_check(check),
+            try:
+                acknowledged = await self.hass.async_add_executor_job(
+                    partial(
+                        self._prepare_rearm,
+                        source_id,
+                        owner_id,
+                        value,
+                        lambda: self._loop_check(check),
+                    )
                 )
-            )
+            except BridgeError as err:
+                if err.code == "continuity_mismatch":
+                    self._invalidate(source_id)
+                raise
             check()
             token = secrets.token_urlsafe(32)
             self.leases[token] = WriteLease(

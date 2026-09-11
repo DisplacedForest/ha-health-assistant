@@ -115,12 +115,16 @@ async def test_lost_response_rearm_validates_pending_without_replaying(
 @pytest.mark.parametrize(
     "change", ["hash", "null_with_history", "wrong_checkpoint", "second_domain"]
 )
-async def test_rearm_mismatch_never_grants_partial_lease(hass, bridge, change):
+@pytest.mark.parametrize("already_armed", [False, True])
+async def test_rearm_mismatch_never_grants_partial_lease(
+    hass, bridge, change, already_armed
+):
     repository, source_id = bridge
     runtime = BridgeRuntime(hass, repository.database, clock=lambda: NOW)
     grant = await arm(runtime, source_id)
     await submit(runtime, source_id, grant)
-    runtime = BridgeRuntime(hass, repository.database, clock=lambda: NOW)
+    if not already_armed:
+        runtime = BridgeRuntime(hass, repository.database, clock=lambda: NOW)
     state = rearm_state(runtime, source_id, domains=("scalar", "workout"))
     if change == "hash":
         state["domains"]["scalar"]["committed"]["latest_request_hash"] = "a" * 64
@@ -138,6 +142,8 @@ async def test_rearm_mismatch_never_grants_partial_lease(hass, bridge, change):
     with pytest.raises(BridgeError, match="continuity_mismatch"):
         await arm(runtime, source_id, state)
     assert not runtime.leases
+    with pytest.raises(BridgeError, match="session_required"):
+        await submit(runtime, source_id, grant)
 
 
 async def test_one_active_one_queued_then_busy_and_revoke_checks_both(
