@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from .bridge_models import BridgeError, reserved
 from .recovery_models import (
     PAYLOAD_FIELDS,
     RecoveryChangeResult,
@@ -135,6 +136,8 @@ class RecoveryRepository:
         for change in changes:
             if not isinstance(change, RecoveryObservation):
                 raise RecoveryError()
+            if reserved(change.provider):
+                raise BridgeError("reserved_provider")
             observation = normalized_observation(
                 change.provider,
                 change.source_id,

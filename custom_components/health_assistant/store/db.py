@@ -32,6 +32,7 @@ class HealthDatabase:
             try:
                 conn.execute("PRAGMA journal_mode = WAL")
                 conn.execute("PRAGMA foreign_keys = ON")
+                conn.execute("PRAGMA temp_store = FILE")
                 apply_migrations(conn)
             except StoreError:
                 conn.close()

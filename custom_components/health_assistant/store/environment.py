@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, replace
 from typing import Any
 from uuid import uuid4
 
+from .bridge_registry import require_registry_slot
 from .db import HealthDatabase
 from .errors import StoreValidationError
 
@@ -159,14 +160,11 @@ class EnvironmentRepository:
             )
             if found and tuple(found[0][k] for k in required) == identity:
                 return dict(found[0])
-            if (
-                self.database.execute("SELECT COUNT(*) FROM environment_streams")[0][0]
-                >= MAX_STREAMS
-            ):
-                raise StoreValidationError("Environmental stream limit reached")
+            public_id = str(uuid4())
+            require_registry_slot(self.database, public_id)
             self.database.execute(
                 "INSERT INTO environment_streams (public_id, mapping_id, source_id, entity_id, metric, area_id, area_name, unit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid4()), *identity, ENVIRONMENT_UNITS[mapping["metric"]]),
+                (public_id, *identity, ENVIRONMENT_UNITS[mapping["metric"]]),
             )
             return dict(
                 self.database.execute(

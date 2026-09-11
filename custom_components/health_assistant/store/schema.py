@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 
-from .errors import StoreVersionError
+from .errors import StoreValidationError, StoreVersionError
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -300,6 +301,62 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             "INSERT INTO recovery_state(id,generation) VALUES(1,0)",
         ),
     ),
+    (
+        9,
+        (
+            """
+            CREATE TABLE bridge_sources (
+                source_id TEXT PRIMARY KEY,
+                person_id TEXT NOT NULL,
+                adapter_kind TEXT NOT NULL,
+                upstream_store TEXT NOT NULL,
+                upstream_scope TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                label TEXT NOT NULL,
+                origin_mode TEXT NOT NULL,
+                owner_id TEXT,
+                retired INTEGER NOT NULL DEFAULT 0,
+                needs_fresh_namespace INTEGER NOT NULL DEFAULT 0,
+                capture_started_at TEXT
+            ) WITHOUT ROWID
+            """,
+            """
+            CREATE TABLE bridge_receipts (
+                source_id TEXT NOT NULL REFERENCES bridge_sources(source_id),
+                domain TEXT NOT NULL,
+                checkpoint_mode TEXT NOT NULL,
+                batch_id BLOB,
+                request_hash BLOB,
+                checkpoint_id TEXT,
+                changed INTEGER NOT NULL DEFAULT 0,
+                unchanged INTEGER NOT NULL DEFAULT 0,
+                stale INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(source_id,domain)
+            ) WITHOUT ROWID
+            """,
+            """
+            CREATE TABLE bridge_records (
+                source_id TEXT NOT NULL REFERENCES bridge_sources(source_id),
+                domain TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                record_type TEXT NOT NULL,
+                source_revision INTEGER NOT NULL,
+                hash_version INTEGER NOT NULL,
+                payload_hash TEXT NOT NULL,
+                source_state TEXT NOT NULL,
+                locally_excluded INTEGER NOT NULL DEFAULT 0,
+                first_ingested_at TEXT NOT NULL,
+                last_ingested_at TEXT NOT NULL,
+                payload_json TEXT,
+                projection_id INTEGER,
+                PRIMARY KEY(source_id,domain,external_id)
+            ) WITHOUT ROWID
+            """,
+            "CREATE UNIQUE INDEX idx_bridge_projection ON bridge_records(domain,projection_id) WHERE projection_id IS NOT NULL",
+            "CREATE INDEX idx_bridge_source_state ON bridge_records(source_id,domain,source_state)",
+            "CREATE INDEX idx_claims_reconcile ON source_claims(person_id,metric,observed_at,provider,external_id)",
+        ),
+    ),
 )
 
 
@@ -320,6 +377,29 @@ def apply_migrations(
             f"database schema version {version} is newer than supported "
             f"version {latest}"
         )
+    if version < 9 and any(target == 9 for target, _ in migrations):
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for table in (
+            "observations",
+            "source_claims",
+            "workouts",
+            "sleep_sessions",
+            "recovery_records",
+            "provider_state",
+        ):
+            if table not in tables:
+                continue
+            for row in conn.execute(
+                f"SELECT DISTINCT provider FROM {table} WHERE provider LIKE 'bridge:%'"
+            ):
+                if re.fullmatch(
+                    r"bridge:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                    row[0],
+                ):
+                    raise StoreValidationError("namespace_collision")
     for target, statements in migrations:
         if target <= version:
             continue
