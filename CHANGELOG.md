@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A read-only derived API provides daily values, rolling trends and personal baselines from local history. It keeps accounts and recovery methods separate, shows missing coverage and recalculates after corrections or exclusions.
 - Recovery providers can store resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate with their original method and measurement window. Sources and contexts stay separate, and corrections preserve local exclusions.
 - Dev installs preserve the sleep and recovery protocol namespace so their portable archives remain compatible with regular installs.
 - Portable history includes recovery observations and deletion tombstones. Older archives leave existing recovery history alone.

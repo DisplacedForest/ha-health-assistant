@@ -305,3 +305,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and the pull request 
 The store now supports resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate from explicitly authorized providers. Measurements retain their source, method, measurement window and context. Unknown context stays unknown, and different HRV methods or algorithms are never combined. This adds storage and bounded read APIs; phone connections, baseline calculations and the Recovery panel are separate work.
 
 Corrections replace complete source payloads while preserving local exclusions. Ordered deletion tombstones prevent older records from returning. Portable history includes recovery records and tombstones without reconnecting their sources. Existing scalar readings and Overview calculations are unchanged. See [recovery provider and API guidance](docs/recovery.md) for supported units, comparison-series keys and administrator exclusion.
+
+### Daily values and personal baselines
+
+The read-only derived API computes daily representatives, 7/28/90-day rolling means and trends, and a personal baseline from the preceding 28 days. A baseline needs at least 14 days with data. Missing days stay empty, and the current incomplete day is excluded from rolling calculations. Sleep uses the longest session ending on a display date, without adding naps or filling coverage gaps. Recovery accounts, contexts and HRV methods stay separate.
+
+Queries use current local history, so corrections and exclusions appear on the next read. These are descriptive values, not illness predictions or readiness scores. Existing Overview and Body screens keep their behavior. See [derived values and API guidance](docs/derived-metrics.md) for selection rules, display timezones, coverage and null reasons.
