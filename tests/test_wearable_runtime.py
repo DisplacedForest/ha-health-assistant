@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 import threading
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -112,3 +113,19 @@ async def test_stop_during_start_does_not_leave_a_timer(hass):
         release.set()
         await asyncio.gather(start, stop)
         timer.assert_not_called()
+
+
+async def test_maintenance_database_failure_is_reported_and_can_recover(hass):
+    runtime = WearableRuntime(hass, None, SimpleNamespace())
+    success = {"changed_streams": 0, "degraded_streams": 0}
+    with patch.object(
+        runtime.repository,
+        "maintain",
+        side_effect=[sqlite3.OperationalError("fixture failure"), success],
+    ):
+        failed = await runtime.async_maintain()
+        assert failed["failed"]
+        assert runtime._task is None
+        assert await runtime.async_maintain() == success
+        assert runtime.last_maintenance == success
+    await runtime.async_stop()

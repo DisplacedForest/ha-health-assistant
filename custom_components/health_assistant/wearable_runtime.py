@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 
 from .signals import SIGNAL_HEALTH_DATA_UPDATED
+from .store.errors import StoreError
 from .store.wearable import WearableRepository
 
 
@@ -35,11 +37,18 @@ class WearableRuntime:
         )
 
     async def _maintain(self):
-        result = await self.hass.async_add_executor_job(
-            self.repository.maintain, self.clock()
-        )
+        try:
+            result = await self.hass.async_add_executor_job(
+                self.repository.maintain, self.clock()
+            )
+        except StoreError, sqlite3.DatabaseError:
+            result = {"changed_streams": 0, "degraded_streams": 0, "failed": True}
         self.last_maintenance = result
-        if result["changed_streams"] or result["degraded_streams"]:
+        if (
+            result["changed_streams"]
+            or result["degraded_streams"]
+            or result.get("failed")
+        ):
             async_dispatcher_send(self.hass, SIGNAL_HEALTH_DATA_UPDATED)
         return result
 
