@@ -4,8 +4,9 @@ import re
 import sqlite3
 
 from .errors import StoreValidationError, StoreVersionError
+from .wearable_schema import MIGRATION as WEARABLE_MIGRATION
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
     (
@@ -357,6 +358,7 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             "CREATE INDEX idx_claims_reconcile ON source_claims(person_id,metric,observed_at,provider,external_id)",
         ),
     ),
+    (10, WEARABLE_MIGRATION),
 )
 
 

@@ -226,6 +226,11 @@ async def ws_bridge_admin(hass, connection, msg):
                     elif action == "remove":
                         bridge.registry.remove(source_id)
                     elif action == "fresh_namespace":
+                        if bridge.database.execute(
+                            "SELECT 1 FROM wearable_streams WHERE source_id=? LIMIT 1",
+                            (source_id,),
+                        ):
+                            raise BridgeError("wearable_fresh_namespace_required")
                         if (
                             parameters["capture_mode"]
                             not in ("forward_only", "backfill")

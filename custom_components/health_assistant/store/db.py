@@ -71,6 +71,14 @@ class HealthDatabase:
                 raise StoreError("database is not open")
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
+    def backup_with_clock(self, destination: Path, clock):
+        with self._lock:
+            if self._transaction_depth:
+                raise StoreError("backup requires a committed database")
+            instant = clock()
+            self.backup(destination)
+            return instant
+
     @contextmanager
     def transaction(self) -> Iterator[None]:
         with self._lock:

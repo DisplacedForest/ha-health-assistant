@@ -71,6 +71,16 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
                 )[0]
             ),
         },
+        "wearable": {
+            "streams": database.execute("SELECT count(*) FROM wearable_streams")[0][0],
+            "buckets": database.execute("SELECT count(*) FROM wearable_buckets")[0][0],
+            "retired_streams": database.execute(
+                "SELECT count(*) FROM wearable_streams WHERE retired=1"
+            )[0][0],
+            "degraded_streams": database.execute(
+                "SELECT count(*) FROM wearable_streams WHERE degraded=1"
+            )[0][0],
+        },
         "bridge": {
             "sources": database.execute("SELECT count(*) FROM bridge_sources")[0][0],
             "imported_sources": database.execute(
@@ -114,6 +124,10 @@ async def async_get_config_entry_diagnostics(
         _collect_database_facts, entry.runtime_data.database
     )
     database_facts["environment"].update(entry.runtime_data.environment.diagnostics())
+    if entry.runtime_data.wearable is not None:
+        database_facts["wearable"]["maintenance"] = (
+            entry.runtime_data.wearable.last_maintenance
+        )
     return {
         "domain": DOMAIN,
         "version": str(integration.version),

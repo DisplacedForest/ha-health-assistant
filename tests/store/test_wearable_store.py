@@ -34,7 +34,6 @@ from custom_components.health_assistant.store.wearable_models import (
     timestamp,
 )
 from custom_components.health_assistant.store.wearable_queries import WearableQueries
-from custom_components.health_assistant.store.wearable_schema import MIGRATION
 from custom_components.health_assistant.store.wearable_snapshot import (
     IDENTITY_FIELDS,
     snapshot_hash,
@@ -47,9 +46,6 @@ START = time_us(NOW - timedelta(days=1))
 
 @pytest.fixture
 def wearable(database):
-    with database.transaction():
-        for statement in MIGRATION:
-            database.execute(statement)
     registry = BridgeRegistry(database)
     source = registry.enroll(
         {
@@ -555,9 +551,6 @@ def test_archive_stages_complete_graph_before_replay_with_reordered_rows(
     staging.open()
     target.open()
     try:
-        for db in (staging, target):
-            for statement in MIGRATION:
-                db.execute(statement)
         with staging.transaction():
             prepare_staging(staging)
             for bucket in reversed(buckets):
@@ -597,8 +590,6 @@ def test_archive_rejects_orphan_records_before_replay(wearable, tmp_path, missin
     staging = HealthDatabase(tmp_path / "orphan.sqlite")
     staging.open()
     try:
-        for statement in MIGRATION:
-            staging.execute(statement)
         with (
             pytest.raises(WearableError, match=f"missing_{missing}_descriptor"),
             staging.transaction(),

@@ -5,7 +5,6 @@ from custom_components.health_assistant.store.bridge_models import DOMAINS
 from custom_components.health_assistant.store.bridge_registry import BridgeRegistry
 from custom_components.health_assistant.store.wearable import WearableRepository
 from custom_components.health_assistant.store.wearable_models import canonical
-from custom_components.health_assistant.store.wearable_schema import MIGRATION
 from custom_components.health_assistant.wearable_websocket import (
     async_register_wearable_websocket,
 )
@@ -19,9 +18,6 @@ async def test_wearable_read_only_route_and_strict_inputs(
     database = config_entry.runtime_data.database
 
     def prepare():
-        with database.transaction():
-            for statement in MIGRATION:
-                database.execute(statement)
         source = BridgeRegistry(database).enroll(
             {
                 "adapter_kind": "fixture",

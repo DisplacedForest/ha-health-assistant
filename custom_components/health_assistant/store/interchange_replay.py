@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .bridge_archive import replay_bridge, validate_target_sources
 from .bridge_models import reserved
@@ -64,7 +64,10 @@ def _count(counts, domain, action):
     counts.setdefault(domain, {"create": 0, "merge": 0, "unchanged": 0})[action] += 1
 
 
-def replay_archive(staging, target, after_batch=None):
+def replay_archive(staging, target, after_batch=None, *, now=None):
+    from .wearable_archive import replay_wearable
+
+    now = now or datetime.now(UTC)
     repository = HealthRepository(target)
     counts = {}
     validate_target_sources(staging, target, counts)
@@ -163,6 +166,7 @@ def replay_archive(staging, target, after_batch=None):
     _replay_sleep(staging, target, counts, after_batch)
     _replay_recovery(staging, target, counts, after_batch)
     replay_bridge(staging, target, counts, after_batch)
+    replay_wearable(staging, target, counts, after_batch, now)
     return counts
 
 

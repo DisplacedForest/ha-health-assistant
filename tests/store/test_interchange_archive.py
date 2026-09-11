@@ -259,11 +259,11 @@ def test_export_snapshot_stays_consistent_while_ingestion_continues(
             )
         )
 
-    def records(connection, domain):
+    def records(connection, domain, snapshot_at=None):
         if domain == "observations":
             with ThreadPoolExecutor(max_workers=1) as executor:
                 executor.submit(write).result(timeout=5)
-        yield from original(connection, domain)
+        yield from original(connection, domain, snapshot_at)
 
     monkeypatch.setattr(interchange_archive, "snapshot_records", records)
     manifest = export_archive(database, tmp_path / "history.tar.gz")

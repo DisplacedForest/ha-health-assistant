@@ -294,13 +294,11 @@ def test_registry_capacity_shared_and_import_read_only(bridge):
     assert registry_count(repository.database) == 2
     with pytest.raises(BridgeError, match="registration_paused"):
         repository.registry.require_live(descriptor["source_id"], "owner")
-    repository.database.execute(
-        "CREATE TABLE wearable_streams(stream_id TEXT,source_id TEXT)"
-    )
     with repository.database.transaction():
         for _ in range(254):
             repository.database.execute(
-                "INSERT INTO wearable_streams VALUES(?,?)", (str(uuid4()), source_id)
+                "INSERT INTO wearable_streams(stream_id,source_id,metric,unit,weighting,origin_mode) VALUES(?,?,'heart_rate','bpm','sample','imported_history')",
+                (str(uuid4()), source_id),
             )
     descriptor["source_id"] = str(uuid4())
     with pytest.raises(BridgeError, match="registry_capacity"):

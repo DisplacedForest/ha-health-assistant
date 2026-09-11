@@ -1,8 +1,17 @@
 import hashlib
 from datetime import UTC, datetime
+from functools import partial
+
+import pytest
 
 from custom_components.health_assistant.store.bridge_models import DOMAINS
+from custom_components.health_assistant.store.interchange import (
+    export_archive,
+    import_archive,
+)
 from custom_components.health_assistant.store.wearable_models import canonical
+
+pytestmark = pytest.mark.freeze_time("2026-09-11T00:00:00Z")
 
 
 def native_batch(stream_id, expected=0, mean=70):
@@ -229,4 +238,118 @@ async def test_wearable_admin_rejects_read_only_sessions(
         )[0][0]
         == 0
     )
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_archive_preview_keeps_lease_and_apply_requires_rearm(
+    hass, config_entry, hass_ws_client, hass_client, hass_admin_user, tmp_path
+):
+    socket, source_id, stream_id = await enroll(
+        hass, config_entry, hass_ws_client, hass_admin_user
+    )
+    bridge = config_entry.runtime_data.bridge
+    grant = (
+        await arm(
+            socket,
+            3,
+            source_id,
+            stream_id,
+            bridge.receiver_session_id,
+            hass_admin_user.id,
+        )
+    )["result"]
+    client = await hass_client()
+    url = f"/api/health_assistant/bridge/{source_id}/batches"
+    body = native_batch(stream_id)
+    assert (await client.post(url, json=body, headers=headers(grant))).status == 200
+    archive = tmp_path / "portable.tar.gz"
+    await hass.async_add_executor_job(export_archive, bridge.database, archive)
+    await hass.async_add_executor_job(
+        partial(
+            import_archive,
+            bridge.database,
+            archive,
+            apply_context=bridge.import_context,
+        )
+    )
+    assert (await client.post(url, json=body, headers=headers(grant))).status == 200
+    await hass.async_add_executor_job(
+        partial(
+            import_archive,
+            bridge.database,
+            archive,
+            dry_run=False,
+            apply_context=bridge.import_context,
+        )
+    )
+    assert (await client.post(url, json=body, headers=headers(grant))).status == 409
+    rearmed = await arm(
+        socket,
+        4,
+        source_id,
+        stream_id,
+        bridge.receiver_session_id,
+        hass_admin_user.id,
+        committed={
+            "sequence": "1",
+            "content_hash": body["stream_batch"]["content_hash"],
+        },
+    )
+    assert rearmed["success"], rearmed
+    next_response = await client.post(
+        url, json=native_batch(stream_id, 1, 80), headers=headers(rearmed["result"])
+    )
+    assert next_response.status == 200
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_fresh_namespace_clones_streams_and_keeps_original_history(
+    hass, config_entry, hass_ws_client, hass_client, hass_admin_user
+):
+    socket, source_id, stream_id = await enroll(
+        hass, config_entry, hass_ws_client, hass_admin_user
+    )
+    bridge = config_entry.runtime_data.bridge
+    grant = (
+        await arm(
+            socket,
+            3,
+            source_id,
+            stream_id,
+            bridge.receiver_session_id,
+            hass_admin_user.id,
+        )
+    )["result"]
+    client = await hass_client()
+    url = f"/api/health_assistant/bridge/{source_id}/batches"
+    body = native_batch(stream_id)
+    assert (await client.post(url, json=body, headers=headers(grant))).status == 200
+    denied = await request(
+        socket,
+        4,
+        "bridge/admin",
+        action="fresh_namespace",
+        parameters={"registration_id": source_id, "capture_mode": "forward_only"},
+    )
+    assert denied["error"]["code"] == "wearable_fresh_namespace_required"
+    created = await request(
+        socket,
+        5,
+        "wearable/admin",
+        action="fresh_namespace",
+        parameters={
+            "registration_id": source_id,
+            "capture_mode": "forward_only",
+            "stream_ids": [stream_id],
+        },
+    )
+    assert created["success"], created
+    replacement = created["result"]
+    assert replacement["registration_id"] != source_id
+    assert replacement["streams"][0]["stream_id"] != stream_id
+    old_tip = await hass.async_add_executor_job(
+        config_entry.runtime_data.wearable.repository.tip, stream_id
+    )
+    assert old_tip["retired"] and old_tip["sequence"] == "1"
+    assert (await client.post(url, json=body, headers=headers(grant))).status == 409
     assert await hass.config_entries.async_unload(config_entry.entry_id)

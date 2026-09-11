@@ -97,17 +97,23 @@ History starts with the next fresh sensor report. Five-minute records store the 
 
 Five-minute records are kept for 90 days, then combined into hourly records until they reach two years old. Older records are removed. Hourly history retains the total covered time but loses the exact timing of gaps within the hour. Maintenance runs after startup and daily. Diagnostics show its last success, record counts and sanitized failure status. A failed database write pauses capture while pending records are retried; that interval stays uncovered. An orderly unload saves the partial record. A crash can lose the open five-minute record.
 
-Twelve continuously recorded streams budget about 79.31 MB after two years, plus fixed database overhead and maintenance delay. Area changes create additional stream revisions, so the number of active sensors alone does not describe storage use. The registry holds at most 256 active or historical streams; setup reports an error at that limit. SQLite reuses deleted pages, so the file may keep its previous size. Backups need additional space.
+Twelve continuously recorded streams budget about 79.31 MB after two years, plus fixed database overhead and maintenance delay. Area changes create additional stream revisions, so the number of active sensors alone does not describe storage use. The registry holds at most 256 environmental streams, bridge sources and wearable streams combined; setup reports an error at that limit. SQLite reuses deleted pages, so the file may keep its previous size. Backups need additional space.
 
 Environmental records live locally in the same database as health history. Room names, source IDs and timing can be sensitive even without health values. SQLite backups and portable history archives include retained environmental records, coverage and area metadata. A database backup restores the whole store; a portable import merges its history.
 
-This build moves the database to schema 9. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it. Migration stops if a custom legacy provider already uses the reserved `bridge:<UUID>` namespace; it does not adopt that history.
+This build moves the database to schema 10. Older integration builds cannot open it. Before upgrading, create a backup. To return to an older build, restore a backup that matches it. Migration stops if a custom legacy provider already uses the reserved `bridge:<UUID>` namespace; it does not adopt that history.
 
 ## Native phone bridge
 
 The native bridge receiver stores ordered corrections, deletions and source identity for compatible phone producers. It supports scalar values, workouts, sleep and recovery records. Apple Health and Health Connect client routes still need qualification; installing this receiver doesn't connect a phone by itself.
 
-An administrator enrolls the source and explicitly rearms it after every integration setup, reload or backup restore. Capture stays paused when the producer's saved state doesn't match. Portable imports preserve history without granting capture permission. Environmental streams and bridge sources share the same 256-slot registry. See [native bridge setup and protocol](docs/mobile-bridge.md) for enrollment, payloads, retries, rearm and current limits.
+An administrator enrolls the source and explicitly rearms it after every integration setup, reload or backup restore. Capture stays paused when the producer's saved state doesn't match. Portable imports preserve history without granting capture permission. Environmental streams, bridge sources and wearable streams share the same 256-slot registry. See [native bridge setup and protocol](docs/mobile-bridge.md) for enrollment, payloads, retries, rearm and current limits.
+
+## Wearable heart-rate history
+
+An enrolled bridge can also send compact heart-rate intervals. Corrections replace complete intervals, and ordered deletions keep older data from returning. Sample-weighted and time-weighted history stay separate. Minute history rolls up after seven days, five-minute history after ninety days, and hourly history expires after two years.
+
+The authenticated wearable API exposes retained intervals with bounded pagination. Portable archives preserve each complete stream snapshot and its sequence. This adds storage and an API; phone client routes still need qualification, and the panel does not yet chart these streams. See [wearable history and setup](docs/wearable-series.md).
 
 ## Getting data in
 

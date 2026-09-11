@@ -43,7 +43,7 @@ def stage_record(database, domain, record):
         )
 
 
-def finalize_staging(database, now):
+def finalize_staging(database, now, *, snapshot_at=None):
     count = database.execute("SELECT COUNT(*) FROM wearable_archive_descriptors")[0][0]
     if registry_count(database) + count > 256:
         raise WearableError("registry_capacity")
@@ -55,6 +55,10 @@ def finalize_staging(database, now):
         "SELECT descriptor FROM wearable_archive_descriptors ORDER BY stream_id"
     ):
         descriptor = json.loads(record[0])
+        if snapshot_at is not None and time_us(descriptor["snapshot_at"]) != time_us(
+            snapshot_at
+        ):
+            raise WearableError("snapshot_clock_mismatch")
         validator = SnapshotValidator(descriptor, time_us(now))
         source_id = descriptor["source_id"]
         if not database.execute(
