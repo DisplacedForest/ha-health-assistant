@@ -169,6 +169,8 @@ class RecoveryRepository:
             if not isinstance(checkpoint, tuple) or len(checkpoint) != 2:
                 raise RecoveryError()
             provider, state = checkpoint
+            if reserved(provider):
+                raise BridgeError("reserved_provider")
             if (
                 not isinstance(provider, str)
                 or not provider

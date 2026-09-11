@@ -7,9 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from custom_components.health_assistant.store.bridge import BridgeRepository
 from custom_components.health_assistant.store.bridge_models import (
-    DOMAINS,
     BridgeError,
     canonical,
     normalize_payload,
@@ -17,10 +15,8 @@ from custom_components.health_assistant.store.bridge_models import (
     provider,
 )
 from custom_components.health_assistant.store.bridge_registry import (
-    BridgeRegistry,
     registry_count,
 )
-from custom_components.health_assistant.store.db import HealthDatabase
 from custom_components.health_assistant.store.models import (
     HealthObservation,
     MetricType,
@@ -28,26 +24,6 @@ from custom_components.health_assistant.store.models import (
 from custom_components.health_assistant.store.schema import MIGRATIONS, apply_migrations
 
 NOW = datetime(2026, 9, 11, tzinfo=UTC)
-
-
-@pytest.fixture
-def bridge(tmp_path):
-    database = HealthDatabase(tmp_path / "bridge.sqlite")
-    database.open()
-    registry = BridgeRegistry(database)
-    source = registry.enroll(
-        {
-            "adapter_kind": "synthetic",
-            "upstream_store": "apple_health",
-            "upstream_scope": "fixture",
-            "label": "Fixture",
-        },
-        "owner",
-        dict.fromkeys(DOMAINS, "none"),
-        NOW,
-    )
-    yield BridgeRepository(database), source["source_id"]
-    database.close()
 
 
 def native_record(
@@ -357,3 +333,123 @@ def test_streaming_reconciliation_matches_reference(bridge):
         tuple(row)
         for row in repository.database.execute("SELECT * FROM observations ORDER BY id")
     ] == before
+
+
+@pytest.mark.parametrize(
+    "domain,record_type,payload,table",
+    [
+        (
+            "workout",
+            "workout",
+            {
+                "workout_type": "walk",
+                "started_at": "2026-09-10T00:00:00Z",
+                "ended_at": "2026-09-10T00:00:00Z",
+                "provenance": {},
+            },
+            "workouts",
+        ),
+        (
+            "sleep",
+            "sleep_session",
+            {
+                "started_at": "2026-09-10T00:00:00Z",
+                "ended_at": "2026-09-10T08:00:00Z",
+                "provenance": {},
+            },
+            "sleep_sessions",
+        ),
+        (
+            "recovery",
+            "hrv_sdnn",
+            {
+                "value": 50,
+                "unit": "ms",
+                "started_at": "2026-09-10T00:00:00Z",
+                "ended_at": "2026-09-10T00:00:00Z",
+                "provenance": {},
+            },
+            "recovery_records",
+        ),
+    ],
+)
+def test_native_domain_delete_before_create_resurrection_and_replay(
+    bridge, domain, record_type, payload, table
+):
+    repository, source_id = bridge
+    deletion = native_record(
+        source_id, domain=domain, record_type=record_type, delete=True
+    )
+    assert ingest(repository, source_id, [deletion], domain=domain)["changed"] == 1
+    active = native_record(
+        source_id, revision=2, domain=domain, record_type=record_type, payload=payload
+    )
+    assert ingest(repository, source_id, [active], domain=domain)["changed"] == 1
+    assert (
+        ingest(repository, source_id, [deletion], domain=domain)["counts"]["stale"] == 1
+    )
+    assert (
+        ingest(repository, source_id, [active], domain=domain)["counts"]["unchanged"]
+        == 1
+    )
+    assert repository.database.execute(f"SELECT count(*) FROM {table}")[0][0] == 1
+
+
+@pytest.mark.parametrize("value", [True, "80", float("inf"), float("nan")])
+def test_native_quantities_reject_non_binary64_numbers(value):
+    with pytest.raises(BridgeError):
+        normalize_payload(
+            "scalar",
+            "weight",
+            {
+                "value": value,
+                "unit": "kg",
+                "observed_at": "2026-09-10T00:00:00Z",
+                "provenance": {},
+            },
+            NOW,
+        )
+
+
+def test_original_wire_limit_and_escaped_domain():
+    body = b'{"\\u0064omain": "sl\\u0065ep", "padding":"' + b"x" * 1024 * 1024 + b'"}'
+    assert parse_body(body)["domain"] == "sleep"
+    with pytest.raises(BridgeError, match="size_limit"):
+        parse_body(body.replace(b"sl\\u0065ep", b"scalar"))
+    with pytest.raises(BridgeError):
+        parse_body(b'{"invalid\\x":"value"}')
+
+
+def test_equal_identity_type_conflict_even_when_stale_and_deleted(bridge):
+    repository, source_id = bridge
+    ingest(repository, source_id, [native_record(source_id, revision=5, delete=True)])
+    wrong = native_record(source_id, record_type="lean_mass", delete=True)
+    with pytest.raises(BridgeError, match="identity_conflict"):
+        ingest(repository, source_id, [wrong])
+
+
+def test_provenance_units_and_negative_values_preserve_legacy_domain():
+    result = normalize_payload(
+        "scalar",
+        "weight",
+        {
+            "value": -1,
+            "unit": "kg",
+            "observed_at": "2026-09-10T00:00:00Z",
+            "provenance": {"raw_value": -1000, "raw_unit": "g"},
+        },
+        NOW,
+    )
+    assert result["value"] == -1 and result["provenance"]["raw_value"] == -1000
+    with pytest.raises(BridgeError, match="raw_quantity_mismatch"):
+        normalize_payload(
+            "scalar",
+            "weight",
+            {
+                "value": 1,
+                "unit": "kg",
+                "observed_at": "2026-09-10T00:00:00Z",
+                "provenance": {"raw_value": 2, "raw_unit": "lb"},
+            },
+            NOW,
+        )

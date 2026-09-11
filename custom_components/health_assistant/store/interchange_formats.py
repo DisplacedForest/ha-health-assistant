@@ -80,7 +80,12 @@ LEGACY_DOMAINS = (
     "environment_buckets",
     "environment_maintenance",
 )
-DOMAINS = LEGACY_DOMAINS + ("sleep_sessions", "recovery_records")
+DOMAINS = LEGACY_DOMAINS + (
+    "sleep_sessions",
+    "recovery_records",
+    "bridge_sources",
+    "bridge_records",
+)
 SLEEP_FIELDS = frozenset(
     (
         "person_id",
@@ -97,6 +102,33 @@ SLEEP_FIELDS = frozenset(
     )
 )
 RECOVERY_FIELDS = frozenset(SLEEP_FIELDS)
+BRIDGE_SOURCE_FIELDS = frozenset(
+    (
+        "source_id",
+        "person_id",
+        "adapter_kind",
+        "upstream_store",
+        "upstream_scope",
+        "created_at",
+        "label",
+    )
+)
+BRIDGE_RECORD_FIELDS = frozenset(
+    (
+        "source_id",
+        "domain",
+        "external_id",
+        "record_type",
+        "source_revision",
+        "hash_version",
+        "payload_hash",
+        "source_state",
+        "locally_excluded",
+        "first_ingested_at",
+        "last_ingested_at",
+        "payload",
+    )
+)
 COMPATIBILITY = MappingProxyType(
     {
         (1, 6): LEGACY_FIELDS,
@@ -106,6 +138,15 @@ COMPATIBILITY = MappingProxyType(
                 **LEGACY_FIELDS,
                 "sleep_sessions": SLEEP_FIELDS,
                 "recovery_records": RECOVERY_FIELDS,
+            }
+        ),
+        (2, 9): MappingProxyType(
+            {
+                **LEGACY_FIELDS,
+                "sleep_sessions": SLEEP_FIELDS,
+                "recovery_records": RECOVERY_FIELDS,
+                "bridge_sources": BRIDGE_SOURCE_FIELDS,
+                "bridge_records": BRIDGE_RECORD_FIELDS,
             }
         ),
     }

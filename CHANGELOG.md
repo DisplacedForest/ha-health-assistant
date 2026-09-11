@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Native bridge storage tracks source identities, ordered corrections, tombstones and the last accepted batch. Scalar corrections rebuild canonical history while preserving exclusions. A compatible producer is still required for phone capture.
+- Compatible phone producers can send body, activity, workout, sleep and recovery records through the native bridge. Corrections preserve exclusions, and portable imports keep source history without restoring capture permission. An administrator must rearm capture after each reload or restore. Apple Health and Health Connect client routes still need qualification.
 - Sleep and Recovery views show source-specific history, session stages and personal baselines. You can inspect the underlying records, see missing coverage and exclude a record from summaries. Accounts and HRV methods stay separate, and these views do not connect a phone by themselves.
 - A read-only derived API provides daily values, rolling trends and personal baselines from local history. It keeps accounts and recovery methods separate, shows missing coverage and recalculates after corrections or exclusions.
 - Recovery providers can store resting heart rate, HRV SDNN, HRV RMSSD and respiratory rate with their original method and measurement window. Sources and contexts stay separate, and corrections preserve local exclusions.

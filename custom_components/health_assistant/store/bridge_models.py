@@ -94,6 +94,7 @@ def reserved(value):
         and re.fullmatch(
             r"bridge:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
             value,
+            re.IGNORECASE,
         )
         is not None
     )
@@ -159,6 +160,23 @@ def _constant(_value):
     raise BridgeError()
 
 
+def _domain_after(value, index):
+    while index < len(value) and value[index].isspace():
+        index += 1
+    if index == len(value) or value[index] != ":":
+        return None
+    index += 1
+    while index < len(value) and value[index].isspace():
+        index += 1
+    if index == len(value) or value[index] != '"':
+        return None
+    try:
+        result, _ = json.JSONDecoder().raw_decode(value[index : index + 50])
+    except ValueError as err:
+        raise BridgeError() from err
+    return result
+
+
 def parse_body(body):
     if not isinstance(body, bytes) or len(body) > 8 * 1024 * 1024:
         raise BridgeError("size_limit")
@@ -178,16 +196,13 @@ def parse_body(body):
                 escaped = True
             elif character == '"':
                 quoted = False
-                if (
-                    depth == 1
-                    and json.loads(value[string_start - 1 : index + 1]) == "domain"
-                ):
-                    match = re.match(
-                        r'\s*:\s*"(sleep|scalar|workout|recovery|wearable)"',
-                        value[index + 1 : index + 64],
-                    )
-                    if match:
-                        domain = match[1]
+                if depth == 1:
+                    try:
+                        string = json.loads(value[string_start - 1 : index + 1])
+                    except ValueError as err:
+                        raise BridgeError() from err
+                    if string == "domain":
+                        domain = _domain_after(value, index + 1)
         elif character == '"':
             quoted = True
             string_start = index + 1

@@ -19,6 +19,7 @@ depends = ["frontend-install"]
 run = "npm --prefix frontend-src run build"
 
 [tasks.frontend-test]
+depends = ["frontend-install"]
 run = "npm --prefix frontend-src test"
 
 [tasks.frontend-verify]

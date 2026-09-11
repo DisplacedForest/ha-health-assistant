@@ -6,6 +6,8 @@ from .bridge_models import (
     DOMAINS,
     SOURCE_FIELDS,
     BridgeError,
+    canonical,
+    exact,
     source_descriptor,
     text,
     timestamp,
@@ -68,6 +70,7 @@ class BridgeRegistry:
         }
 
     def enroll(self, metadata, owner_id, modes, now, *, capture_started_at=None):
+        exact(metadata, ("adapter_kind", "upstream_store", "upstream_scope", "label"))
         if (
             not isinstance(modes, dict)
             or set(modes) != set(DOMAINS)
@@ -99,6 +102,22 @@ class BridgeRegistry:
         return self.get(source["source_id"])
 
     def _insert(self, source, origin_mode, owner_id=None, boundary=None):
+        reserved_receipts = [
+            [domain, "opaque_cas", "f" * 36, "f" * 64, "x" * 128, 100, 100, 100]
+            for domain in DOMAINS
+        ]
+        canonical(
+            [
+                [source[key] for key in SOURCE_FIELDS],
+                origin_mode,
+                owner_id,
+                False,
+                False,
+                boundary,
+                reserved_receipts,
+            ],
+            2048,
+        )
         self.database.execute(
             "INSERT INTO bridge_sources(source_id,person_id,adapter_kind,upstream_store,upstream_scope,created_at,label,origin_mode,owner_id,capture_started_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (*[source[key] for key in SOURCE_FIELDS], origin_mode, owner_id, boundary),

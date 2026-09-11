@@ -21,6 +21,7 @@ def import_archive(
     dry_run=True,
     after_batch=None,
     source_file=None,
+    apply_context=None,
 ):
     with TemporaryDirectory(
         prefix="health-import-", dir=database.path.parent
@@ -65,9 +66,18 @@ def import_archive(
                 }
             )
             if not dry_run:
-                summary["applied"] = replay_archive(
-                    staging, database, after_batch=after_batch
-                )
+                required_sources = [
+                    row[0]
+                    for row in staging.execute(
+                        "SELECT source_id FROM bridge_records UNION SELECT source_id FROM sleep_sessions WHERE provider='bridge:'||source_id UNION SELECT source_id FROM recovery_records WHERE provider='bridge:'||source_id"
+                    )
+                ]
+                with (
+                    apply_context(required_sources) if apply_context else nullcontext()
+                ):
+                    summary["applied"] = replay_archive(
+                        staging, database, after_batch=after_batch
+                    )
             return summary
         finally:
             staging.close()

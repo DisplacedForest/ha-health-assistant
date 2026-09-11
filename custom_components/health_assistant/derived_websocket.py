@@ -23,6 +23,10 @@ async def _execute(hass, connection, msg, method, **kwargs):
         return
     runtime = entries[0].runtime_data
     states = {}
+    if runtime.bridge is not None:
+        for lease in runtime.bridge.leases.values():
+            for domain in lease.domains:
+                states[("bridge", lease.source_id, domain)] = "armed"
     for key, provider in runtime.registry.providers.items():
         capabilities = provider.capabilities
         if not capabilities.can_import:

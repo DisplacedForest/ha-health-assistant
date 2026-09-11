@@ -667,6 +667,8 @@ class HealthRepository:
         return state
 
     def set_provider_state(self, provider: str, state: dict[str, Any]) -> None:
+        if reserved(provider):
+            raise BridgeError("reserved_provider")
         if not isinstance(state, dict):
             raise StoreValidationError("provider state must be a dict")
         try:

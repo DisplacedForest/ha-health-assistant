@@ -12,6 +12,8 @@ from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
+from .bridge_api import async_register_bridge_api
+from .bridge_runtime import BridgeRuntime
 from .const import CONF_HEVY_SOURCE, CONF_SOURCE_MAPPINGS, DOMAIN
 from .coordinator import HealthSummaryCoordinator
 from .environment import CONF_ENVIRONMENT, EnvironmentalCapture
@@ -41,6 +43,7 @@ class HealthAssistantData:
     registry: ProviderRegistry
     coordinator: HealthSummaryCoordinator
     environment: EnvironmentalCapture
+    bridge: BridgeRuntime | None = None
 
 
 type HealthAssistantConfigEntry = ConfigEntry[HealthAssistantData]
@@ -106,6 +109,7 @@ async def async_setup_entry(
         registry=registry,
         coordinator=coordinator,
         environment=environment,
+        bridge=BridgeRuntime(hass, database),
     )
     await coordinator.async_config_entry_first_refresh()
 
@@ -118,6 +122,7 @@ async def async_setup_entry(
     )
     async_setup_services(hass)
     async_register_websocket_api(hass)
+    async_register_bridge_api(hass)
     await async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await registry.async_start()
@@ -130,6 +135,8 @@ async def async_unload_entry(
 ) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        if entry.runtime_data.bridge is not None:
+            await entry.runtime_data.bridge.async_stop()
         await entry.runtime_data.environment.async_stop()
         await entry.runtime_data.registry.async_stop()
         async_remove_panel(hass)

@@ -46,10 +46,10 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
     )
     workout_count = database.execute("SELECT COUNT(*) AS n FROM workouts")
     observation_providers = database.execute(
-        "SELECT provider, COUNT(*) AS n FROM source_claims GROUP BY provider"
+        "SELECT CASE WHEN provider LIKE 'bridge:%' THEN 'bridge' ELSE provider END AS provider, COUNT(*) AS n FROM source_claims GROUP BY CASE WHEN provider LIKE 'bridge:%' THEN 'bridge' ELSE provider END"
     )
     workout_providers = database.execute(
-        "SELECT provider, COUNT(*) AS n FROM workouts GROUP BY provider"
+        "SELECT CASE WHEN provider LIKE 'bridge:%' THEN 'bridge' ELSE provider END AS provider, COUNT(*) AS n FROM workouts GROUP BY CASE WHEN provider LIKE 'bridge:%' THEN 'bridge' ELSE provider END"
     )
     path = database.path
     return {
@@ -70,6 +70,19 @@ def _collect_database_facts(database: HealthDatabase) -> dict[str, Any]:
                     "SELECT last_success_ms, duration_ms, rolled_up, deleted, failed FROM environment_maintenance WHERE id=1"
                 )[0]
             ),
+        },
+        "bridge": {
+            "sources": database.execute("SELECT count(*) FROM bridge_sources")[0][0],
+            "imported_sources": database.execute(
+                "SELECT count(*) FROM bridge_sources WHERE origin_mode='imported_history'"
+            )[0][0],
+            "needs_fresh_namespace": database.execute(
+                "SELECT count(*) FROM bridge_sources WHERE needs_fresh_namespace=1"
+            )[0][0],
+            "retired_sources": database.execute(
+                "SELECT count(*) FROM bridge_sources WHERE retired=1"
+            )[0][0],
+            "records": database.execute("SELECT count(*) FROM bridge_records")[0][0],
         },
         "observation_counts": {
             str(row["metric"]): int(row["n"]) for row in observation_counts

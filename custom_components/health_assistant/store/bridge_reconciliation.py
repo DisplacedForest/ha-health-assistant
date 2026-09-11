@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .reconciliation import provider_rank, rule_for, values_close
+
+
+def epoch_us(value):
+    delta = value - datetime(1970, 1, 1, tzinfo=UTC)
+    return (delta.days * 86400 + delta.seconds) * 1000000 + delta.microseconds
 
 
 def sync_exclusions(database):
@@ -17,7 +22,7 @@ def sync_exclusions(database):
 def reconcile_streaming(database, person_id, metric, priority):
     rule = rule_for(metric)
     database.execute(
-        "CREATE TEMP TABLE bridge_groups(group_id INTEGER PRIMARY KEY, canonical_id INTEGER NOT NULL, supplier_id INTEGER NOT NULL, anchor REAL NOT NULL, excluded INTEGER NOT NULL, flagged INTEGER NOT NULL DEFAULT 0)"
+        "CREATE TEMP TABLE bridge_groups(group_id INTEGER PRIMARY KEY, canonical_id INTEGER NOT NULL, supplier_id INTEGER NOT NULL, anchor INTEGER NOT NULL, excluded INTEGER NOT NULL, flagged INTEGER NOT NULL DEFAULT 0)"
     )
     database.execute("CREATE INDEX temp.bridge_group_time ON bridge_groups(anchor)")
     database.execute(
@@ -39,7 +44,7 @@ def reconcile_streaming(database, person_id, metric, priority):
                         group_id,
                         canonical_id,
                         supplier_id,
-                        anchor.timestamp(),
+                        epoch_us(anchor),
                         int(excluded),
                     ),
                 )
@@ -84,7 +89,7 @@ def reconcile_streaming(database, person_id, metric, priority):
             )
         finish()
         if rule.suspicious_window is not None:
-            window = rule.suspicious_window.total_seconds()
+            window = int(rule.suspicious_window.total_seconds()) * 1000000
             database.execute(
                 """
                 UPDATE bridge_groups AS a SET flagged=1 WHERE EXISTS(

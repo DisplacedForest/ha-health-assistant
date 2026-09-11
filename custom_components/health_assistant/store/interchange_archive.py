@@ -36,6 +36,8 @@ def archive_domains(manifest):
 
 
 ORDER = {
+    "bridge_sources": "source_id",
+    "bridge_records": "source_id,domain,external_id",
     "sleep_sessions": "id",
     "recovery_records": "id",
     "observations": "id",
@@ -93,6 +95,16 @@ def snapshot_records(connection, domain: str) -> Iterator[dict]:
     try:
         while rows := cursor.fetchmany(PAGE_SIZE):
             for row in rows:
+                if domain == "bridge_sources":
+                    from .bridge_models import SOURCE_FIELDS
+
+                    yield {key: row[key] for key in SOURCE_FIELDS}
+                    continue
+                if domain == "bridge_records":
+                    from .bridge_archive import archive_record
+
+                    yield archive_record(row)
+                    continue
                 if domain == "sleep_sessions":
                     from .sleep import archive_session, session_from_row
 
@@ -228,6 +240,13 @@ def validate_manifest(manifest: dict) -> None:
         total += metadata["bytes"]
     if total > MAX_EXPANDED_BYTES:
         raise StoreValidationError("Archive exceeds the 8 GiB expanded limit")
+    registered = sum(
+        files[name]["records"]
+        for name in ("environment_streams.jsonl", "bridge_sources.jsonl")
+        if name in files
+    )
+    if registered > 256:
+        raise StoreValidationError("Archive registry limit exceeded")
 
 
 class _BoundedReader:
