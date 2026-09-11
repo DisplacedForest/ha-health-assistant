@@ -283,8 +283,10 @@ export class SparseController {
         excluded: !record.locally_excluded, expected_source_revision: record.source_revision, expected_payload_hash: record.payload_hash,
       });
       if (!this.active || this.domain !== domain || this.selectionVersion !== selection) return;
+      const reconcileDetail = this.detailId === record.id && Boolean(this.detail || this.detailLoading);
+      const detailRequest = reconcileDetail ? ++this.detailVersion : undefined;
       await this.refresh();
-      if (this.active && this.detailVersion === request && this.domain === domain) await this.openDetail(record.id);
+      if (reconcileDetail && this.active && this.domain === domain && this.selectionVersion === selection && this.detailVersion === detailRequest) await this.openDetail(record.id, undefined, true, false);
     } catch (error) {
       if (!current()) return;
       if (error?.code === "revision_conflict") {

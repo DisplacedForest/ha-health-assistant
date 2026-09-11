@@ -411,3 +411,31 @@ test("obsolete source page cannot clear the current page lock or append duplicat
   assert.deepEqual(c.sources.map((item) => item.series_key.source_id), ["watch", "second"]);
   assert.equal(c.sourceLoading, false);
 });
+
+test("committed exclusion reconciles a reopened same record and ignores its precommit detail", async () => {
+  const commit = deferred(), oldDetail = deferred();
+  let reads = 0, committed = false, focus = 0;
+  const { c, host } = fixture("recovery", {
+    recovery_observation_exclusion: async () => { await commit.promise; committed = true; },
+    recovery_observation: () => {
+      reads++;
+      const result = { ...detail(), metric:"hrv_sdnn", context:"sleep_summary", value:50, unit:"ms", locally_excluded:committed, status:committed ? "excluded" : "active" };
+      return reads === 2 ? oldDetail.promise : result;
+    },
+  });
+  host.shadowRoot = { querySelector: () => ({ focus: () => focus++ }) };
+  await c.refresh();
+  await c.openDetail(5);
+  const mutation = c.exclude();
+  c.closeDetail();
+  const reopened = c.openDetail(5);
+  commit.resolve({});
+  await mutation;
+  oldDetail.resolve({ ...detail(), metric:"hrv_sdnn", context:"sleep_summary", value:50, unit:"ms" });
+  await reopened;
+  assert.equal(c.detail.locally_excluded, true);
+  assert.equal(c.detail.status, "excluded");
+  assert.match(text(renderRecovery(c)), /Restore to summaries/);
+  assert.doesNotMatch(text(renderRecovery(c)), />Exclude from summaries</);
+  assert.equal(focus, 1);
+});
